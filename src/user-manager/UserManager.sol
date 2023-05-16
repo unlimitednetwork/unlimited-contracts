@@ -4,6 +4,7 @@ pragma solidity 0.8.17;
 
 import "@openzeppelin-upgradeable/contracts/proxy/utils/Initializable.sol";
 import "../interfaces/IController.sol";
+import "../interfaces/ITradeManager.sol";
 import "../interfaces/IUserManager.sol";
 import "../shared/UnlimitedOwnable.sol";
 
@@ -91,6 +92,9 @@ contract UserManager is IUserManager, UnlimitedOwnable, Initializable {
     /// @notice Controller contract.
     IController public immutable controller;
 
+    /// @notice TradeManager contract.
+    ITradeManager public immutable tradeManager;
+
     /// @notice Contains user traded volume for each day.
     mapping(address => mapping(uint256 => DailyVolumes)) public userDailyVolumes;
 
@@ -114,8 +118,11 @@ contract UserManager is IUserManager, UnlimitedOwnable, Initializable {
      * @param unlimitedOwner_ Unlimited owner contract.
      * @param controller_ Controller contract.
      */
-    constructor(IUnlimitedOwner unlimitedOwner_, IController controller_) UnlimitedOwnable(unlimitedOwner_) {
+    constructor(IUnlimitedOwner unlimitedOwner_, IController controller_, ITradeManager tradeManager_)
+        UnlimitedOwnable(unlimitedOwner_)
+    {
         controller = controller_;
+        tradeManager = tradeManager_;
     }
 
     /**
@@ -283,7 +290,7 @@ contract UserManager is IUserManager, UnlimitedOwnable, Initializable {
      * @param user_ address of the user
      * @param referrer_ address of the referrer
      */
-    function setUserReferrer(address user_, address referrer_) external {
+    function setUserReferrer(address user_, address referrer_) external onlyTradeManager {
         require(user_ != referrer_, "UserManager::setUserReferrer: User cannot be referrer");
         if (_userReferrer[user_] == address(0)) {
             if (referrer_ == address(0)) {
@@ -310,7 +317,7 @@ contract UserManager is IUserManager, UnlimitedOwnable, Initializable {
         (uint256 index, uint256 position) = _getTodaysIndexAndPosition();
         _addUserDailyVolume(user_, index, position, volume_);
 
-        emit UserVolumeAdded(user_, volume_);
+        emit UserVolumeAdded(user_, msg.sender, volume_);
     }
 
     /**
@@ -502,6 +509,13 @@ contract UserManager is IUserManager, UnlimitedOwnable, Initializable {
         require(controller.isTradePair(tradePair), "UserManager::_onlyValidTradePair: Trade pair is not valid");
     }
 
+    /**
+     * @dev Reverts when sender is not the TradeManager
+     */
+    function _onlyTradeManager() private view {
+        require(msg.sender == address(tradeManager), "UserManager::_onlyTradeManager: only TradeManager");
+    }
+
     /* ========== MODIFIERS ========== */
 
     /**
@@ -509,6 +523,14 @@ contract UserManager is IUserManager, UnlimitedOwnable, Initializable {
      */
     modifier onlyValidTradePair(address tradePair) {
         _onlyValidTradePair(tradePair);
+        _;
+    }
+
+    /**
+     * @dev Verifies that TradeManager sent the transaction
+     */
+    modifier onlyTradeManager() {
+        _onlyTradeManager();
         _;
     }
 }

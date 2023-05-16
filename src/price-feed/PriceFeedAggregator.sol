@@ -93,7 +93,7 @@ contract PriceFeedAggregator is IPriceFeedAggregator, UnlimitedOwnable {
     /* ========== PRIVATE FUNCTIONS ========== */
 
     function _minMaxFromMultiplePriceFeeds() internal view returns (int256, int256) {
-        int256 _minPrice = 2 ** 128;
+        int256 _minPrice = type(int256).max;
         int256 _maxPrice = 0;
         for (uint256 i = 0; i < priceFeeds.length; i++) {
             int256 _price = priceFeeds[i].price();

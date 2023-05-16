@@ -39,8 +39,9 @@ contract LiquidityPoolTest is Test, WithMocks {
         uint256 sharesBob = _deposit(BOB, depositAmountBob);
 
         // ASSERT
-        assertEq(depositAmountAlice * 1e10, sharesAlice);
-        assertEq(depositAmountBob * 1e10, sharesBob);
+        uint256 decimalsDiff = 10 ** (liquidityPool.decimals() - 8);
+        assertEq(depositAmountAlice * decimalsDiff, sharesAlice);
+        assertEq(depositAmountBob * decimalsDiff, sharesBob);
     }
 
     function testDeposit_testAfterProfit() public {
@@ -55,7 +56,8 @@ contract LiquidityPoolTest is Test, WithMocks {
         uint256 sharesBob = _deposit(BOB, depositAmountBob);
 
         // ASSERT
-        assertEq(depositAmountAlice * 1e10, sharesAlice);
+        uint256 decimalsDiff = 10 ** (liquidityPool.decimals() - 8);
+        assertEq(depositAmountAlice * decimalsDiff, sharesAlice);
         assertEq(sharesAlice, sharesBob);
     }
 

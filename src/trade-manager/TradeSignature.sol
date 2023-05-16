@@ -13,7 +13,7 @@ import "../interfaces/ITradeManager.sol";
  */
 contract TradeSignature is EIP712 {
     bytes32 public constant OPEN_POSITION_ORDER_TYPEHASH = keccak256(
-        "OpenPositionOrder(OpenPositionParams params,Constraints constraints, uint256 salt)Constraints(uint256 deadline,int256 minPrice,int256 maxPrice)OpenPositionParams(address tradePair,uint256 margin,uint256 leverage,bool isShort,address referrer,address whitelabelAddress)"
+        "OpenPositionOrder(OpenPositionParams params,Constraints constraints,uint256 salt)Constraints(uint256 deadline,int256 minPrice,int256 maxPrice)OpenPositionParams(address tradePair,uint256 margin,uint256 leverage,bool isShort,address referrer,address whitelabelAddress)"
     );
 
     bytes32 public constant OPEN_POSITION_PARAMS_TYPEHASH = keccak256(
@@ -21,14 +21,14 @@ contract TradeSignature is EIP712 {
     );
 
     bytes32 public constant CLOSE_POSITION_ORDER_TYPEHASH = keccak256(
-        "ClosePositionOrder(ClosePosition closePosition,Constraints constraints, uint256 salt)Constraints(uint256 deadline,int256 minPrice,int256 maxPrice)ClosePositionParams(address tradePair,uint256 positionId)"
+        "ClosePositionOrder(ClosePosition closePosition,Constraints constraints,uint256 salt)Constraints(uint256 deadline,int256 minPrice,int256 maxPrice)ClosePositionParams(address tradePair,uint256 positionId)"
     );
 
     bytes32 public constant CLOSE_POSITION_PARAMS_TYPEHASH =
         keccak256("ClosePositionParams(address tradePair,uint256 positionId)");
 
     bytes32 public constant PARTIALLY_CLOSE_POSITION_ORDER_TYPEHASH = keccak256(
-        "PartiallyClosePositionOrder(PartiallyClosePositionParams params,Constraints constraints, uint256 salt)Constraints(uint256 deadline,int256 minPrice,int256 maxPrice)PartiallyClosePositionParams(address tradePair,uint256 positionId,uint256 proportion,uint256 leaveLeverageFactor)"
+        "PartiallyClosePositionOrder(PartiallyClosePositionParams params,Constraints constraints,uint256 salt)Constraints(uint256 deadline,int256 minPrice,int256 maxPrice)PartiallyClosePositionParams(address tradePair,uint256 positionId,uint256 proportion,uint256 leaveLeverageFactor)"
     );
 
     bytes32 public constant PARTIALLY_CLOSE_POSITION_PARAMS_TYPEHASH = keccak256(
@@ -36,7 +36,7 @@ contract TradeSignature is EIP712 {
     );
 
     bytes32 public constant EXTEND_POSITION_ORDER_TYPEHASH = keccak256(
-        "ExtendPositionOrder(ExtendPositionParams params,Constraints constraints, uint256 salt)Constraints(uint256 deadline,int256 minPrice,int256 maxPrice)ExtendPositionParams(address tradePair,uint256 positionId,uint256 addedMargin,uint256 addedLeverage)"
+        "ExtendPositionOrder(ExtendPositionParams params,Constraints constraints,uint256 salt)Constraints(uint256 deadline,int256 minPrice,int256 maxPrice)ExtendPositionParams(address tradePair,uint256 positionId,uint256 addedMargin,uint256 addedLeverage)"
     );
 
     bytes32 public constant EXTEND_POSITION_PARAMS_TYPEHASH = keccak256(
@@ -44,21 +44,21 @@ contract TradeSignature is EIP712 {
     );
 
     bytes32 public constant EXTEND_POSITION_TO_LEVERAGE_ORDER_TYPEHASH = keccak256(
-        "ExtendPositionToLeverageOrder(ExtendPositionToLeverageParams params,Constraints constraints, uint256 salt)Constraints(uint256 deadline,int256 minPrice,int256 maxPrice)ExtendPositionToLeverageParams(address tradePair,uint256 positionId,uint256 targetLeverage)"
+        "ExtendPositionToLeverageOrder(ExtendPositionToLeverageParams params,Constraints constraints,uint256 salt)Constraints(uint256 deadline,int256 minPrice,int256 maxPrice)ExtendPositionToLeverageParams(address tradePair,uint256 positionId,uint256 targetLeverage)"
     );
 
     bytes32 public constant EXTEND_POSITION_TO_LEVERAGE_PARAMS_TYPEHASH =
         keccak256("ExtendPositionToLeverageParams(address tradePair,uint256 positionId,uint256 targetLeverage)");
 
     bytes32 public constant REMOVE_MARGIN_FROM_POSITION_ORDER_TYPEHASH = keccak256(
-        "RemoveMarginFromPositionOrder(RemoveMarginFromPositionParams params,Constraints constraints, uint256 salt)Constraints(uint256 deadline,int256 minPrice,int256 maxPrice)RemoveMarginFromPositionParams(address tradePair,uint256 positionId,uint256 removedMargin)"
+        "RemoveMarginFromPositionOrder(RemoveMarginFromPositionParams params,Constraints constraints,uint256 salt)Constraints(uint256 deadline,int256 minPrice,int256 maxPrice)RemoveMarginFromPositionParams(address tradePair,uint256 positionId,uint256 removedMargin)"
     );
 
     bytes32 public constant REMOVE_MARGIN_FROM_POSITION_PARAMS_TYPEHASH =
         keccak256("RemoveMarginFromPositionParams(address tradePair,uint256 positionId,uint256 removedMargin)");
 
     bytes32 public constant ADD_MARGIN_TO_POSITION_ORDER_TYPEHASH = keccak256(
-        "AddMarginToPositionOrder(AddMarginToPositionParams params,Constraints constraints, uint256 salt)Constraints(uint256 deadline,int256 minPrice,int256 maxPrice)AddMarginToPositionParams(address tradePair,uint256 positionId,uint256 addedMargin)"
+        "AddMarginToPositionOrder(AddMarginToPositionParams params,Constraints constraints,uint256 salt)Constraints(uint256 deadline,int256 minPrice,int256 maxPrice)AddMarginToPositionParams(address tradePair,uint256 positionId,uint256 addedMargin)"
     );
 
     bytes32 public constant ADD_MARGIN_TO_POSITION_PARAMS_TYPEHASH =
@@ -184,7 +184,7 @@ contract TradeSignature is EIP712 {
     function hash(OpenPositionParams calldata openPositionParams) internal pure returns (bytes32) {
         return keccak256(
             abi.encode(
-                OPEN_POSITION_ORDER_TYPEHASH,
+                OPEN_POSITION_PARAMS_TYPEHASH,
                 openPositionParams.tradePair,
                 openPositionParams.margin,
                 openPositionParams.leverage,

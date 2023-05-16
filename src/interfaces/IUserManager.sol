@@ -20,7 +20,7 @@ interface IUserManager {
 
     event FeeVolumeUpdated(uint256 indexed feeIndex, uint256 feeVolume);
 
-    event UserVolumeAdded(address indexed user, uint256 volume);
+    event UserVolumeAdded(address indexed user, address indexed tradePair, uint256 volume);
 
     event UserManualTierUpdated(address indexed user, Tier tier, uint256 validUntil);
 

@@ -215,6 +215,7 @@ contract Controller is IController, UnlimitedOwnable {
      */
     function addSigner(address signer_) external onlyOwner {
         isSigner[signer_] = true;
+        emit SignerAdded(signer_);
     }
 
     /**
@@ -223,6 +224,7 @@ contract Controller is IController, UnlimitedOwnable {
      */
     function removeSigner(address signer_) external onlyOwner {
         isSigner[signer_] = false;
+        emit SignerRemoved(signer_);
     }
 
     /* ========== PRIVATE FUNCTIONS ========== */

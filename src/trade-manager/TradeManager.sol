@@ -59,18 +59,16 @@ contract TradeManager is ITradeManager {
     ) external onlyActiveTradePair(params_.tradePair) returns (uint256) {
         _updateContracts(updateData_);
         _verifyConstraints(params_.tradePair, constraints_, params_.isShort ? UsePrice.MAX : UsePrice.MIN);
-        return _openPosition(params_);
+        return _openPosition(params_, msg.sender);
     }
 
-    function _openPosition(OpenPositionParams memory params_) internal returns (uint256) {
-        ITradePair(params_.tradePair).collateral().safeTransferFrom(
-            msg.sender, address(params_.tradePair), params_.margin
-        );
+    function _openPosition(OpenPositionParams memory params_, address maker_) internal returns (uint256) {
+        ITradePair(params_.tradePair).collateral().safeTransferFrom(maker_, address(params_.tradePair), params_.margin);
 
-        userManager.setUserReferrer(msg.sender, params_.referrer);
+        userManager.setUserReferrer(maker_, params_.referrer);
 
         uint256 id = ITradePair(params_.tradePair).openPosition(
-            msg.sender, params_.margin, params_.leverage, params_.isShort, params_.whitelabelAddress
+            maker_, params_.margin, params_.leverage, params_.isShort, params_.whitelabelAddress
         );
 
         emit PositionOpened(params_.tradePair, id);
@@ -95,11 +93,11 @@ contract TradeManager is ITradeManager {
         PositionDetails memory positionDetails = ITradePair(params_.tradePair).detailsOfPosition(params_.positionId);
         _verifyConstraints(params_.tradePair, constraints_, positionDetails.isShort ? UsePrice.MAX : UsePrice.MIN);
 
-        _closePosition(params_);
+        _closePosition(params_, msg.sender);
     }
 
-    function _closePosition(ClosePositionParams memory params_) internal {
-        ITradePair(params_.tradePair).closePosition(msg.sender, params_.positionId);
+    function _closePosition(ClosePositionParams memory params_, address maker_) internal {
+        ITradePair(params_.tradePair).closePosition(maker_, params_.positionId);
         emit PositionClosed(params_.tradePair, params_.positionId);
     }
 
@@ -119,11 +117,11 @@ contract TradeManager is ITradeManager {
         PositionDetails memory positionDetails = ITradePair(params_.tradePair).detailsOfPosition(params_.positionId);
         _verifyConstraints(params_.tradePair, constraints_, positionDetails.isShort ? UsePrice.MAX : UsePrice.MIN);
 
-        _partiallyClosePosition(params_);
+        _partiallyClosePosition(params_, msg.sender);
     }
 
-    function _partiallyClosePosition(PartiallyClosePositionParams memory params_) internal {
-        ITradePair(params_.tradePair).partiallyClosePosition(msg.sender, params_.positionId, params_.proportion);
+    function _partiallyClosePosition(PartiallyClosePositionParams memory params_, address maker_) internal {
+        ITradePair(params_.tradePair).partiallyClosePosition(maker_, params_.positionId, params_.proportion);
         emit PositionPartiallyClosed(params_.tradePair, params_.positionId, params_.proportion);
     }
 
@@ -144,11 +142,11 @@ contract TradeManager is ITradeManager {
         PositionDetails memory positionDetails = ITradePair(params_.tradePair).detailsOfPosition(params_.positionId);
         _verifyConstraints(params_.tradePair, constraints_, positionDetails.isShort ? UsePrice.MAX : UsePrice.MIN);
 
-        _removeMarginFromPosition(params_);
+        _removeMarginFromPosition(params_, msg.sender);
     }
 
-    function _removeMarginFromPosition(RemoveMarginFromPositionParams memory params_) internal {
-        ITradePair(params_.tradePair).removeMarginFromPosition(msg.sender, params_.positionId, params_.removedMargin);
+    function _removeMarginFromPosition(RemoveMarginFromPositionParams memory params_, address maker_) internal {
+        ITradePair(params_.tradePair).removeMarginFromPosition(maker_, params_.positionId, params_.removedMargin);
 
         emit MarginRemovedFromPosition(params_.tradePair, params_.positionId, params_.removedMargin);
     }
@@ -170,17 +168,17 @@ contract TradeManager is ITradeManager {
         PositionDetails memory positionDetails = ITradePair(params_.tradePair).detailsOfPosition(params_.positionId);
         _verifyConstraints(params_.tradePair, constraints_, positionDetails.isShort ? UsePrice.MAX : UsePrice.MIN);
 
-        // Transfer Collateral to TradePair
-        ITradePair(params_.tradePair).collateral().safeTransferFrom(
-            msg.sender, address(params_.tradePair), params_.addedMargin
-        );
-
         // Call Add Margin
-        _addMarginToPosition(params_);
+        _addMarginToPosition(params_, msg.sender);
     }
 
-    function _addMarginToPosition(AddMarginToPositionParams memory params_) internal {
-        ITradePair(params_.tradePair).addMarginToPosition(msg.sender, params_.positionId, params_.addedMargin);
+    function _addMarginToPosition(AddMarginToPositionParams memory params_, address maker_) internal {
+        // Transfer Collateral to TradePair
+        ITradePair(params_.tradePair).collateral().safeTransferFrom(
+            maker_, address(params_.tradePair), params_.addedMargin
+        );
+
+        ITradePair(params_.tradePair).addMarginToPosition(maker_, params_.positionId, params_.addedMargin);
 
         emit MarginAddedToPosition(params_.tradePair, params_.positionId, params_.addedMargin);
     }
@@ -202,17 +200,17 @@ contract TradeManager is ITradeManager {
         PositionDetails memory positionDetails = ITradePair(params_.tradePair).detailsOfPosition(params_.positionId);
         _verifyConstraints(params_.tradePair, constraints_, positionDetails.isShort ? UsePrice.MAX : UsePrice.MIN);
 
-        // Transfer Collateral to TradePair
-        ITradePair(params_.tradePair).collateral().safeTransferFrom(
-            msg.sender, address(params_.tradePair), params_.addedMargin
-        );
-
-        _extendPosition(params_);
+        _extendPosition(params_, msg.sender);
     }
 
-    function _extendPosition(ExtendPositionParams memory params_) internal {
+    function _extendPosition(ExtendPositionParams memory params_, address maker_) internal {
+        // Transfer Collateral to TradePair
+        ITradePair(params_.tradePair).collateral().safeTransferFrom(
+            maker_, address(params_.tradePair), params_.addedMargin
+        );
+
         ITradePair(params_.tradePair).extendPosition(
-            msg.sender, params_.positionId, params_.addedMargin, params_.addedLeverage
+            maker_, params_.positionId, params_.addedMargin, params_.addedLeverage
         );
 
         emit PositionExtended(params_.tradePair, params_.positionId, params_.addedMargin, params_.addedLeverage);
@@ -235,11 +233,11 @@ contract TradeManager is ITradeManager {
         PositionDetails memory positionDetails = ITradePair(params_.tradePair).detailsOfPosition(params_.positionId);
         _verifyConstraints(params_.tradePair, constraints_, positionDetails.isShort ? UsePrice.MAX : UsePrice.MIN);
 
-        _extendPositionToLeverage(params_);
+        _extendPositionToLeverage(params_, msg.sender);
     }
 
-    function _extendPositionToLeverage(ExtendPositionToLeverageParams memory params_) internal {
-        ITradePair(params_.tradePair).extendPositionToLeverage(msg.sender, params_.positionId, params_.targetLeverage);
+    function _extendPositionToLeverage(ExtendPositionToLeverageParams memory params_, address maker_) internal {
+        ITradePair(params_.tradePair).extendPositionToLeverage(maker_, params_.positionId, params_.targetLeverage);
 
         emit PositionExtendedToLeverage(params_.tradePair, params_.positionId, params_.targetLeverage);
     }
@@ -266,12 +264,12 @@ contract TradeManager is ITradeManager {
      * @param tradePair_ address of the trade pair
      * @param positionId_ position id
      */
-    function _tryLiquidatePosition(address tradePair_, uint256 positionId_)
+    function _tryLiquidatePosition(address tradePair_, uint256 positionId_, address maker_)
         internal
         onlyActiveTradePair(tradePair_)
         returns (bool)
     {
-        try ITradePair(tradePair_).liquidatePosition(msg.sender, positionId_) {
+        try ITradePair(tradePair_).liquidatePosition(maker_, positionId_) {
             emit PositionLiquidated(tradePair_, positionId_);
             return true;
         } catch {
@@ -301,7 +299,8 @@ contract TradeManager is ITradeManager {
         didLiquidate = new bool[][](tradePairs.length);
 
         for (uint256 i = 0; i < tradePairs.length; i++) {
-            didLiquidate[i] = _batchLiquidatePositionsOfTradePair(tradePairs[i], positionIds[i], allowRevert);
+            didLiquidate[i] =
+                _batchLiquidatePositionsOfTradePair(tradePairs[i], positionIds[i], allowRevert, msg.sender);
         }
     }
 
@@ -312,14 +311,16 @@ contract TradeManager is ITradeManager {
      * @param allowRevert if true, reverts if any call reverts
      * @return didLiquidate bool[] results of the individual liquidation calls
      */
-    function _batchLiquidatePositionsOfTradePair(address tradePair, uint256[] calldata positionIds, bool allowRevert)
-        internal
-        returns (bool[] memory didLiquidate)
-    {
+    function _batchLiquidatePositionsOfTradePair(
+        address tradePair,
+        uint256[] calldata positionIds,
+        bool allowRevert,
+        address maker_
+    ) internal returns (bool[] memory didLiquidate) {
         didLiquidate = new bool[](positionIds.length);
 
         for (uint256 i = 0; i < positionIds.length; i++) {
-            if (_tryLiquidatePosition(tradePair, positionIds[i])) {
+            if (_tryLiquidatePosition(tradePair, positionIds[i], maker_)) {
                 didLiquidate[i] = true;
             } else {
                 if (allowRevert) {

@@ -20,6 +20,8 @@ abstract contract LiquidityPoolVault is ERC20Upgradeable, ILiquidityPoolVault {
 
     IERC20Metadata internal immutable _asset;
 
+    uint8 internal constant _decimals = 24;
+
     /**
      * @dev Set the underlying asset contract. This must be an ERC20-compatible contract (ERC20 or ERC777).
      */
@@ -32,6 +34,13 @@ abstract contract LiquidityPoolVault is ERC20Upgradeable, ILiquidityPoolVault {
      */
     function asset() public view virtual override returns (address) {
         return address(_asset);
+    }
+
+    /**
+     * @dev See {IERC4262-decimals}
+     */
+    function decimals() public view virtual override returns (uint8) {
+        return _decimals;
     }
 
     /**

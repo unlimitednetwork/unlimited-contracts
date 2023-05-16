@@ -396,7 +396,7 @@ contract LiquidityPool is ILiquidityPool, UnlimitedOwnable, Initializable, Liqui
         poolInfo.totalPoolShares -= poolShares_;
         poolInfo.amount -= lpAmount;
 
-        emit RemovedFromPool(user_, poolId_, poolShares_);
+        emit RemovedFromPool(user_, poolId_, poolShares_, lpAmount);
     }
 
     /**

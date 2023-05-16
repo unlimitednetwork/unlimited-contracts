@@ -70,7 +70,9 @@ interface ITradePair {
 
     event OpenedPosition(address maker, uint256 id, uint256 margin, uint256 volume, uint256 size, bool isShort);
 
-    event ClosedPosition(uint256 id);
+    event ClosedPosition(uint256 id, int256 closePrice);
+
+    event LiquidatedPosition(uint256 indexed id, address indexed liquidator);
 
     event AlteredPosition(
         PositionAlterationType alterationType, uint256 id, uint256 netMargin, uint256 volume, uint256 size
@@ -81,6 +83,8 @@ interface ITradePair {
     event PayedOutCollateral(address maker, uint256 amount, uint256 positionId);
 
     event LiquidityGapWarning(uint256 amount);
+
+    event RealizedPnL(address indexed maker, uint256 indexed positionId, int256 realizedPnL);
 
     /* ========== VIEW FUNCTIONS ========== */
 

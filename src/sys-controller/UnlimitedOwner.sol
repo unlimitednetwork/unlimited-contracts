@@ -37,7 +37,7 @@ contract UnlimitedOwner is IUnlimitedOwner, OwnableUpgradeable {
     /**
      * @dev Returns the address of the current owner.
      */
-    function owner() public view override (IUnlimitedOwner, OwnableUpgradeable) returns (address) {
+    function owner() public view override(IUnlimitedOwner, OwnableUpgradeable) returns (address) {
         return OwnableUpgradeable.owner();
     }
 

@@ -33,10 +33,15 @@ struct PriceData {
 contract UnlimitedPriceFeed is IPriceFeed, IUpdatable, UnlimitedOwnable {
     /* ========== CONSTANTS ========== */
 
-    uint256 private constant SIGNATURE_END = 65;
+    // EVM operates on 32 bytes / 256 bites words, so a word length is 32 bytes.
     uint256 private constant WORD_LENGTH = 32;
+    // The signature is 65 bytes long
+    uint256 private constant SIGNATURE_END = 65;
+    // The signer address is 20 bytes long, but padded to 32 bytes, so it ends at this position:
     uint256 private constant SIGNER_END = SIGNATURE_END + WORD_LENGTH;
-    uint256 private constant DATA_LENGTH = SIGNATURE_END + WORD_LENGTH * 4;
+    // The price data consists of three uints, that all get padded to 32 bytes.
+    // It is thus three words long, so it ends at this position:
+    uint256 private constant DATA_LENGTH = SIGNER_END + WORD_LENGTH * 3;
 
     /// @notice Minimum value that can be set for max deviation.
     uint256 constant MINIMUM_MAX_DEVIATION = 5;

@@ -9,7 +9,7 @@ contract WithTradePair is WithMocks {
     ITradePair tradePair;
 
     /// @notice this function is necessary to exclude this contract from test coverage
-    function testMock() public override (WithMocks) {}
+    function testMock() public override(WithMocks) {}
 
     function deployTradePair() public {
         // Deploy

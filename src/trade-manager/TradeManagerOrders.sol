@@ -47,7 +47,7 @@ contract TradeManagerOrders is TradeManager, TradeSignature {
         _verifyConstraints(
             order_.params.tradePair, order_.constraints, order_.params.isShort ? UsePrice.MAX : UsePrice.MIN
         );
-        uint256 positionId = _openPosition(order_.params);
+        uint256 positionId = _openPosition(order_.params, maker_);
 
         sigHashToTradeId[keccak256(signature_)] = TradeId(order_.params.tradePair, uint96(positionId));
 
@@ -78,7 +78,7 @@ contract TradeManagerOrders is TradeManager, TradeSignature {
         );
 
         // make for all orders
-        _closePosition(_injectPositionIdToCloseOrder(order_).params);
+        _closePosition(_injectPositionIdToCloseOrder(order_).params, maker_);
 
         emit ClosedPositionViaSignature(order_.params.tradePair, order_.params.positionId, signature_);
     }
@@ -104,7 +104,7 @@ contract TradeManagerOrders is TradeManager, TradeSignature {
             order_.constraints,
             ITradePair(order_.params.tradePair).positionIsShort(order_.params.positionId) ? UsePrice.MAX : UsePrice.MIN
         );
-        _partiallyClosePosition(_injectPositionIdToPartiallyCloseOrder(order_).params);
+        _partiallyClosePosition(_injectPositionIdToPartiallyCloseOrder(order_).params, maker_);
 
         emit PartiallyClosedPositionViaSignature(order_.params.tradePair, order_.params.positionId, signature_);
     }
@@ -130,7 +130,7 @@ contract TradeManagerOrders is TradeManager, TradeSignature {
             order_.constraints,
             ITradePair(order_.params.tradePair).positionIsShort(order_.params.positionId) ? UsePrice.MAX : UsePrice.MIN
         );
-        _extendPosition(_injectPositionIdToExtendOrder(order_).params);
+        _extendPosition(_injectPositionIdToExtendOrder(order_).params, maker_);
 
         emit ExtendedPositionViaSignature(order_.params.tradePair, order_.params.positionId, signature_);
     }
@@ -156,7 +156,7 @@ contract TradeManagerOrders is TradeManager, TradeSignature {
             order_.constraints,
             ITradePair(order_.params.tradePair).positionIsShort(order_.params.positionId) ? UsePrice.MAX : UsePrice.MIN
         );
-        _extendPositionToLeverage(_injectPositionIdToExtendToLeverageOrder(order_).params);
+        _extendPositionToLeverage(_injectPositionIdToExtendToLeverageOrder(order_).params, maker_);
 
         emit ExtendedPositionToLeverageViaSignature(order_.params.tradePair, order_.params.positionId, signature_);
     }
@@ -182,7 +182,7 @@ contract TradeManagerOrders is TradeManager, TradeSignature {
             order_.constraints,
             ITradePair(order_.params.tradePair).positionIsShort(order_.params.positionId) ? UsePrice.MAX : UsePrice.MIN
         );
-        _addMarginToPosition(_injectPositionIdToAddMarginOrder(order_).params);
+        _addMarginToPosition(_injectPositionIdToAddMarginOrder(order_).params, maker_);
 
         emit AddedMarginToPositionViaSignature(order_.params.tradePair, order_.params.positionId, signature_);
     }
@@ -208,7 +208,7 @@ contract TradeManagerOrders is TradeManager, TradeSignature {
             order_.constraints,
             ITradePair(order_.params.tradePair).positionIsShort(order_.params.positionId) ? UsePrice.MAX : UsePrice.MIN
         );
-        _removeMarginFromPosition(_injectPositionIdToRemoveMarginOrder(order_).params);
+        _removeMarginFromPosition(_injectPositionIdToRemoveMarginOrder(order_).params, maker_);
 
         emit RemovedMarginFromPositionViaSignature(order_.params.tradePair, order_.params.positionId, signature_);
     }

@@ -5,6 +5,8 @@ pragma solidity 0.8.17;
 import "test/setup/WithFullFixtures.t.sol";
 
 contract E2ETest is WithFullFixtures {
+    event UserVolumeAdded(address indexed user, address indexed tradePair, uint256 volume);
+
     MockToken collateral;
     ILiquidityPool liquidityPool0;
     ILiquidityPool liquidityPool1;
@@ -43,6 +45,10 @@ contract E2ETest is WithFullFixtures {
         deal(address(collateral), ALICE, liquidityAmount);
 
         _depositLiquidity(liquidityPool0, ALICE, liquidityAmount);
+
+        // Check if UserManager emits an event to track volume
+        vm.expectEmit(true, true, false, true);
+        emit UserVolumeAdded(BOB, address(tradePair0), VOLUME_0 / 1e6);
 
         // OPEN POSITION
         deal(address(collateral), BOB, INITIAL_BALANCE);

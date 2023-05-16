@@ -6,6 +6,7 @@ import "forge-std/Test.sol";
 import "../../src/user-manager/UserManager.sol";
 import "../mocks/MockUnlimitedOwner.sol";
 import "../mocks/MockController.sol";
+import "../mocks/MockTradeManager.sol";
 import "test/setup/Constants.sol";
 import "test/setup/WithMocks.t.sol";
 
@@ -21,7 +22,7 @@ contract UserManagerTest is WithMocks {
         // random time, shouldn't be less than 30 days in seconds
         vm.warp(START_TIME);
 
-        userManager = new UserManager(mockUnlimitedOwner, mockController);
+        userManager = new UserManager(mockUnlimitedOwner, mockController, mockTradeManager);
         vm.prank(UNLIMITED_OWNER);
         userManager.initialize(feeSizes, volumes);
     }
@@ -108,7 +109,7 @@ contract UserManagerTest is WithMocks {
 
     function testInitialize() public {
         // ARRANGE
-        userManager = new UserManager(mockUnlimitedOwner, mockController);
+        userManager = new UserManager(mockUnlimitedOwner, mockController, mockTradeManager);
 
         // ACT
         vm.prank(UNLIMITED_OWNER);
@@ -205,11 +206,23 @@ contract UserManagerTest is WithMocks {
         address referrer = address(0x1234);
 
         // ACT
-        vm.prank(UNLIMITED_OWNER);
+        vm.prank(address(mockTradeManager));
         userManager.setUserReferrer(ALICE, referrer);
 
         // ASSERT
         assertEq(userManager.getUserReferrer(ALICE), referrer, "referrer");
+    }
+
+    function testOnlyTradeManagerCanSetUserReferrer() public {
+        // ARRANGE
+        address referrer = address(0x1234);
+
+        // ACT
+        vm.expectRevert("UserManager::_onlyTradeManager: only TradeManager");
+        userManager.setUserReferrer(ALICE, referrer);
+
+        // ASSERT
+        assertEq(userManager.getUserReferrer(ALICE), address(0), "referrer");
     }
 
     function testNoReferrerAddress() public {
@@ -217,7 +230,7 @@ contract UserManagerTest is WithMocks {
         address referrer = address(0x0);
 
         // ACT
-        vm.prank(UNLIMITED_OWNER);
+        vm.prank(address(mockTradeManager));
         userManager.setUserReferrer(ALICE, referrer);
 
         // ASSERT
@@ -230,9 +243,10 @@ contract UserManagerTest is WithMocks {
         address newReferrer = address(0x5678);
 
         // ACT
-        vm.prank(UNLIMITED_OWNER);
+        vm.startPrank(address(mockTradeManager));
         userManager.setUserReferrer(ALICE, referrer);
         userManager.setUserReferrer(ALICE, newReferrer);
+        vm.stopPrank();
 
         // ASSERT
         assertEq(userManager.getUserReferrer(ALICE), referrer, "referrer");
@@ -336,6 +350,7 @@ contract UserManagerTest is WithMocks {
     function testUserCannotBeReferrer() public {
         // ASSERT
         vm.expectRevert("UserManager::setUserReferrer: User cannot be referrer");
+        vm.prank(address(mockTradeManager));
         userManager.setUserReferrer(ALICE, ALICE);
     }
 }

@@ -42,7 +42,9 @@ contract WithFullFixtures is Test {
 
     function _deployMainContracts() internal {
         controller = _deployController();
-        userManager = _deployUserManager(controller);
+        address tradeManager_ = computeCreateAddress(address(this), vm.getNonce(address(this)) + 1);
+        userManager = _deployUserManager(controller, ITradeManager(tradeManager_));
+
         tradeManager = _deployTradeManager(controller, userManager);
         feeManager = _deployFeeManager(controller, userManager);
     }
@@ -56,11 +58,12 @@ contract WithFullFixtures is Test {
         return _controller;
     }
 
-    function _deployUserManager(IController _controller) internal returns (IUserManager) {
-        uint8[7] memory feeSizes = [10, 9, 8, 7, 6, 5, 4];
+    function _deployUserManager(IController _controller, ITradeManager _tradeManager) internal returns (IUserManager) {
+        // To simplify tests, we use the same fee sizes for the first two tiers
+        uint8[7] memory feeSizes = [10, 10, 8, 7, 6, 5, 4];
         uint32[6] memory volumes = [1_000_000, 10_000_000, 100_000_000, 250_000_000, 500_000_000, 1_000_000_000];
 
-        UserManager _userManager = new UserManager(unlimitedOwner, _controller);
+        UserManager _userManager = new UserManager(unlimitedOwner, _controller, _tradeManager);
         _userManager.initialize(feeSizes, volumes);
 
         return _userManager;

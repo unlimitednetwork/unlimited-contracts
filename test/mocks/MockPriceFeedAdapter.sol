@@ -89,12 +89,12 @@ contract MockPriceFeedAdapter is IPriceFeedAdapter {
         return 0;
     }
 
-    function collateralToUsdMin(uint256) external pure returns (uint256) {
-        return 0;
+    function collateralToUsdMin(uint256 amount_) external pure returns (uint256) {
+        return amount_ * 1e2;
     }
 
-    function collateralToUsdMax(uint256) external pure returns (uint256) {
-        return 0;
+    function collateralToUsdMax(uint256 amount_) external pure returns (uint256) {
+        return amount_ * 1e2;
     }
 
     // NOTE: be vary of low value coins e.g. SHIB

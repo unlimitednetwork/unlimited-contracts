@@ -51,9 +51,9 @@ contract WithFixtures is Test {
     /// @notice this function is necessary to exclude this contract from test coverage
     function testMock() public {}
 
-    function deployController() public {
+    function deployController(address deployer) public {
         mockUnlimitedOwner = new MockUnlimitedOwner();
-        mockUnlimitedOwner.setOwner(UNLIMITED_OWNER);
+        mockUnlimitedOwner.setOwner(deployer);
 
         controller = new Controller(mockUnlimitedOwner);
 
@@ -61,8 +61,12 @@ contract WithFixtures is Test {
         uint8[7] memory feeSizes = [BASE_USER_FEE, 9, 8, 7, 6, 5, 4];
         uint32[6] memory volumes = [1_000_000, 10_000_000, 100_000_000, 250_000_000, 500_000_000, 1_000_000_000];
 
-        userManager = new UserManager(mockUnlimitedOwner, controller);
+        address tradeManager_ = computeCreateAddress(deployer, vm.getNonce(deployer) + 1);
+        userManager = new UserManager(mockUnlimitedOwner, controller, ITradeManager(tradeManager_));
+
         userManager.initialize(feeSizes, volumes);
+
+        tradeManager = new TradeManager(controller, userManager);
     }
 
     function deployTokens() public {
@@ -79,7 +83,6 @@ contract WithFixtures is Test {
 
     function deployTradePair() public {
         feeManager = new MockFeeManager();
-        tradeManager = new TradeManager(controller, userManager);
         mockLiquidityPoolAdapter = new MockLiquidityPoolAdapter(collateral);
         mockLiquidityPoolAdapter.setRemainingVolume(REMAINING_VOLUME_0);
 
@@ -118,7 +121,7 @@ contract WithFixtures is Test {
 
     function deployContracts() public {
         vm.startPrank(UNLIMITED_OWNER);
-        deployController();
+        deployController(UNLIMITED_OWNER);
         deployTokens();
         deployPriceFeed();
         deployTradePair();

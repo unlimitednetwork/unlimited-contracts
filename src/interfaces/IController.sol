@@ -25,6 +25,10 @@ interface IController {
 
     event UpdatableRemoved(address indexed updatable);
 
+    event SignerAdded(address indexed signer);
+
+    event SignerRemoved(address indexed signer);
+
     /* ========== VIEW FUNCTIONS ========== */
 
     /// @notice Is trade pair registered

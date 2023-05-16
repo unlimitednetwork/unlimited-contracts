@@ -284,6 +284,7 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
 
         uint256 payout = _registerProtocolPnL(protocolPnL);
 
+        // Make sure the payout to maker does not exceed the collateral for this position made up of the remaining margin and the (possible) received loss payout
         if (payoutToMaker > payout + remainingMargin) {
             payoutToMaker = payout + remainingMargin;
         }
@@ -292,7 +293,9 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
             _payoutToMaker(position.owner, int256(payoutToMaker), positionId_);
         }
 
-        emit ClosedPosition(positionId_);
+        emit RealizedPnL(position.owner, positionId_, _getCurrentNetPnL(position));
+
+        emit ClosedPosition(positionId_, _getCurrentPrice(position.isShort, true));
 
         // Finally delete position
         _deletePosition(positionId_);
@@ -324,15 +327,11 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
         // First it gets assigned the old values, than the new values are subtracted.
         PositionDetails memory positionDelta;
 
-        (int256 currentBorrowFeeIntegral, int256 currentFundingFeeIntegral) = _getCurrentFeeIntegrals(position.isShort);
-
         // Assign old values to positionDelta
         positionDelta.margin = position.margin;
         positionDelta.volume = position.volume;
         positionDelta.assetAmount = position.assetAmount;
-        positionDelta.PnL = position.currentNetPnL(
-            _getCurrentPrice(position.isShort, true), currentBorrowFeeIntegral, currentFundingFeeIntegral
-        );
+        positionDelta.PnL = _getCurrentNetPnL(position);
 
         // partially close in storage
         payoutToMaker = position.partiallyClose(_getCurrentPrice(position.isShort, true), proportion_);
@@ -341,9 +340,7 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
         positionDelta.margin -= position.margin;
         positionDelta.volume -= position.volume;
         positionDelta.assetAmount -= position.assetAmount;
-        positionDelta.PnL -= position.currentNetPnL(
-            _getCurrentPrice(position.isShort, true), currentBorrowFeeIntegral, currentFundingFeeIntegral
-        );
+        positionDelta.PnL -= _getCurrentNetPnL(position);
 
         uint256 payout = _registerProtocolPnL(-positionDelta.PnL);
 
@@ -367,6 +364,8 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
             position.volume,
             position.assetAmount
             );
+
+        emit RealizedPnL(maker_, positionId_, positionDelta.PnL);
     }
 
     /**
@@ -396,7 +395,6 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
      */
     function _extendPosition(address maker_, uint256 positionId_, uint256 addedMargin_, uint256 addedLeverage_)
         private
-        verifyLeverage(addedLeverage_)
     {
         Position storage position = positions[positionId_];
 
@@ -436,6 +434,7 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
         syncFeesBefore
         updatePositionFees(positionId_)
         onlyValidAlteration(positionId_)
+        verifyLeverage(targetLeverage_)
         checkSizeLimitAfter
     {
         _extendPositionToLeverage(positionId_, targetLeverage_);
@@ -628,6 +627,10 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
         // Remove position from total counts
         positionStats.removeTotalCount(position.margin, position.volume, position.assetAmount, position.isShort);
 
+        emit RealizedPnL(position.owner, positionId_, _getCurrentNetPnL(position));
+
+        emit LiquidatedPosition(positionId_, liquidator_);
+
         // Delete Position
         _deletePosition(positionId_);
     }
@@ -661,23 +664,6 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
             // Transfer borrow fee to FeeManager
             _depositBorrowFees(reducedFeeAmount);
         }
-    }
-
-    /**
-     * @dev Returns borrow and funding fee intagral for long or short position
-     */
-    function _getCurrentFeeIntegrals(bool isShort_) internal view returns (int256, int256) {
-        // Funding fee integrals differ for short and long positions
-        (int256 longFeeIntegral, int256 shortFeeIntegral) = feeIntegral.getCurrentFundingFeeIntegrals(
-            positionStats.totalLongAssetAmount, positionStats.totalShortAssetAmount
-        );
-        int256 currentFundingFeeIntegral = isShort_ ? shortFeeIntegral : longFeeIntegral;
-
-        // Borrow fee integrals are the same for short and long positions
-        int256 currentBorrowFeeIntegral = feeIntegral.getCurrentBorrowFeeIntegral();
-
-        // Return the current fee integrals
-        return (currentBorrowFeeIntegral, currentFundingFeeIntegral);
     }
 
     /**
@@ -718,20 +704,6 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
             position_.currentBorrowFeeAmount(currentBorrowFeeIntegral),
             position_.currentFundingFeeAmount(currentFundingFeeIntegral) + int256(additionalFee)
         );
-    }
-
-    /**
-     * @notice Returns the payout to the maker of this position
-     * @param position_ the position to calculate the payout for
-     * @return the payout to the maker of this position
-     */
-    function _getPayoutToMaker(Position storage position_) private view returns (uint256) {
-        (int256 currentBorrowFeeIntegral, int256 currentFundingFeeIntegral) = _getCurrentFeeIntegrals(position_.isShort);
-
-        int256 netEquity = position_.currentNetEquity(
-            _getCurrentPrice(position_.isShort, true), currentBorrowFeeIntegral, currentFundingFeeIntegral
-        );
-        return netEquity > 0 ? uint256(netEquity) : 0;
     }
 
     /**
@@ -1060,6 +1032,50 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
     }
 
     /* ========== INTERNAL VIEW FUNCTIONS ========== */
+
+    /**
+     * @notice Returns the payout to the maker of this position
+     * @param position_ the position to calculate the payout for
+     * @return the payout to the maker of this position
+     */
+    function _getPayoutToMaker(Position storage position_) private view returns (uint256) {
+        (int256 currentBorrowFeeIntegral, int256 currentFundingFeeIntegral) = _getCurrentFeeIntegrals(position_.isShort);
+
+        int256 netEquity = position_.currentNetEquity(
+            _getCurrentPrice(position_.isShort, true), currentBorrowFeeIntegral, currentFundingFeeIntegral
+        );
+        return netEquity > 0 ? uint256(netEquity) : 0;
+    }
+
+    /**
+     * @notice Returns the current price
+     * @param position_ the position to calculate the price for
+     * @return the current price
+     */
+    function _getCurrentNetPnL(Position storage position_) private view returns (int256) {
+        (int256 currentBorrowFeeIntegral, int256 currentFundingFeeIntegral) = _getCurrentFeeIntegrals(position_.isShort);
+
+        return position_.currentNetPnL(
+            _getCurrentPrice(position_.isShort, true), currentBorrowFeeIntegral, currentFundingFeeIntegral
+        );
+    }
+
+    /**
+     * @dev Returns borrow and funding fee intagral for long or short position
+     */
+    function _getCurrentFeeIntegrals(bool isShort_) internal view returns (int256, int256) {
+        // Funding fee integrals differ for short and long positions
+        (int256 longFeeIntegral, int256 shortFeeIntegral) = feeIntegral.getCurrentFundingFeeIntegrals(
+            positionStats.totalLongAssetAmount, positionStats.totalShortAssetAmount
+        );
+        int256 currentFundingFeeIntegral = isShort_ ? shortFeeIntegral : longFeeIntegral;
+
+        // Borrow fee integrals are the same for short and long positions
+        int256 currentBorrowFeeIntegral = feeIntegral.getCurrentBorrowFeeIntegral();
+
+        // Return the current fee integrals
+        return (currentBorrowFeeIntegral, currentFundingFeeIntegral);
+    }
 
     /**
      * @notice Returns if a position is liquidatable

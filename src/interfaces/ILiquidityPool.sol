@@ -30,7 +30,7 @@ interface ILiquidityPool {
 
     event AddedToPool(uint256 indexed poolId, uint256 assetAmount, uint256 amount, uint256 shares);
 
-    event RemovedFromPool(address indexed user, uint256 indexed poolId, uint256 poolShares);
+    event RemovedFromPool(address indexed user, uint256 indexed poolId, uint256 poolShares, uint256 lpShares);
 
     event DepositedFees(address liquidityPoolAdapter, uint256 amount);
 
