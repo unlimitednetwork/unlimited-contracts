@@ -3,6 +3,7 @@
 pragma solidity 0.8.17;
 
 import "forge-std/Test.sol";
+import "lib/openzeppelin-contracts/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import "test/setup/Constants.sol";
 import "src/sys-controller/UnlimitedOwner.sol";
 
@@ -11,12 +12,16 @@ contract UnlimitedOwnerTest is Test {
 
     function setUp() public {
         vm.startPrank(UNLIMITED_OWNER);
-        unlimitedOwner = new UnlimitedOwner();
+        unlimitedOwner =
+            UnlimitedOwner(address(new TransparentUpgradeableProxy(address(new UnlimitedOwner()), address(1), "")));
+
         unlimitedOwner.initialize();
     }
 
     function testInitialize() public {
-        unlimitedOwner = new UnlimitedOwner();
+        unlimitedOwner =
+            UnlimitedOwner(address(new TransparentUpgradeableProxy(address(new UnlimitedOwner()), address(1), "")));
+
         unlimitedOwner.initialize();
 
         vm.expectRevert("Initializable: contract is already initialized");

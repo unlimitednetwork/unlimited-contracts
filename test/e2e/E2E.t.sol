@@ -52,7 +52,7 @@ contract E2ETest is WithFullFixtures {
 
         // OPEN POSITION
         deal(address(collateral), BOB, INITIAL_BALANCE);
-        _openPosition(BOB, tradePair0, INITIAL_BALANCE, LEVERAGE_0, false);
+        _openPosition(BOB_PK, tradeManager, tradePair0, ASSET_PRICE_0, INITIAL_BALANCE, LEVERAGE_0, false);
 
         // ASSERT
         assertEq(collateral.balanceOf(address(STAKERS_ADDRESS)), OPEN_POSITION_FEE_0 * 18 / 100, "stakers");
@@ -64,7 +64,7 @@ contract E2ETest is WithFullFixtures {
         assertEq(collateral.balanceOf(BOB), 0, "bob");
     }
 
-    function testTraderProfit() public {
+    function testTraderProfitPure() public {
         // ADD LIQUIDITY
         uint256 liquidityAmount = 100_000 * COLLATERAL_MULTIPLIER;
         deal(address(collateral), ALICE, liquidityAmount);
@@ -73,21 +73,22 @@ contract E2ETest is WithFullFixtures {
 
         // OPEN POSITION
         deal(address(collateral), BOB, INITIAL_BALANCE);
-        uint256 positionId = _openPosition(BOB, tradePair0, INITIAL_BALANCE, LEVERAGE_0, false);
+        uint256 positionId =
+            _openPosition(BOB_PK, tradeManager, tradePair0, ASSET_PRICE_0, INITIAL_BALANCE, LEVERAGE_0, false);
         vm.roll(2);
 
         uint256 liquidityAfterOpenFee = liquidityAmount + OPEN_POSITION_FEE_0 * 60 / 100;
         uint256 payoutToBob = MARGIN_0 + liquidityAfterOpenFee;
-        uint256 closePositionFeeAmount = payoutToBob / 1000;
+        uint256 closePositionFeeAmount = VOLUME_0 / 1000;
         uint256 balanceBob = payoutToBob - closePositionFeeAmount;
         uint256 liquidityAfterCloseFee = closePositionFeeAmount * 60 / 100;
 
         // CHANGE PRICE
-        int256 newPrice = int256(2_200 * COLLATERAL_MULTIPLIER);
+        int256 newPrice = int256(2_200 * PRICE_MULTIPLIER);
         priceFeedAdapter.setMarkPrices(newPrice, newPrice);
 
         // CLOSE POSITION
-        _closePosition(BOB, tradePair0, positionId, newPrice);
+        _closePosition(BOB_PK, tradeManager, tradePair0, positionId, newPrice);
 
         // ASSERT
         assertEq(collateral.balanceOf(BOB), balanceBob, "bob");
@@ -121,26 +122,27 @@ contract E2ETest is WithFullFixtures {
         deal(address(collateral), BOB, INITIAL_BALANCE);
         vm.warp(1 hours);
 
-        uint256 positionId = _openPosition(BOB, tradePair0, INITIAL_BALANCE, LEVERAGE_0, false);
+        uint256 positionId =
+            _openPosition(BOB_PK, tradeManager, tradePair0, ASSET_PRICE_0, INITIAL_BALANCE, LEVERAGE_0, false);
         vm.roll(2);
 
         uint256 expectedBorrowFees = uint256((BASIS_BORROW_FEE_0) * 25 * int256(VOLUME_0) / FEE_MULTIPLIER);
         uint256 expectedFundingFees = uint256((FUNDING_FEE_0) * 25 * int256(VOLUME_0) / FEE_MULTIPLIER);
         uint256 liquidityAfterOpenFee = liquidityAmount + OPEN_POSITION_FEE_0 * 60 / 100 + expectedBorrowFees;
         uint256 payoutToBob = MARGIN_0 + liquidityAfterOpenFee - expectedBorrowFees - expectedFundingFees;
-        uint256 closePositionFeeAmount = payoutToBob / 1000;
+        uint256 closePositionFeeAmount = VOLUME_0 / 1000;
         uint256 balanceBob = payoutToBob - closePositionFeeAmount;
         uint256 liquidityAfterCloseFee = closePositionFeeAmount * 60 / 100;
 
         // CHANGE PRICE
-        int256 newPrice = int256(2_200 * COLLATERAL_MULTIPLIER);
+        int256 newPrice = int256(2_200 * PRICE_MULTIPLIER);
         priceFeedAdapter.setMarkPrices(newPrice, newPrice);
 
         // SET TIME
         vm.warp(25 hours + 1 hours);
 
         // CLOSE POSITION
-        _closePosition(BOB, tradePair0, positionId, newPrice);
+        _closePosition(BOB_PK, tradeManager, tradePair0, positionId, newPrice);
 
         // ASSERT
         assertEq(collateral.balanceOf(BOB), balanceBob, "bob");
@@ -172,22 +174,23 @@ contract E2ETest is WithFullFixtures {
 
         // OPEN POSITION
         deal(address(collateral), BOB, INITIAL_BALANCE);
-        uint256 positionId = _openPosition(BOB, tradePair0, INITIAL_BALANCE, LEVERAGE_0, false);
+        uint256 positionId =
+            _openPosition(BOB_PK, tradeManager, tradePair0, ASSET_PRICE_0, INITIAL_BALANCE, LEVERAGE_0, false);
         vm.roll(2);
 
         uint256 liquidityAfterOpenFee = liquidityAmount + OPEN_POSITION_FEE_0 * 60 / 100;
         uint256 payoutToBob = MARGIN_0 / 2 + liquidityAfterOpenFee;
-        uint256 closePositionFeeAmount = payoutToBob / 1000;
+        uint256 closePositionFeeAmount = VOLUME_0 / 2 / 1000;
         uint256 balanceBob = payoutToBob - closePositionFeeAmount;
         uint256 liquidityAfterCloseFee = closePositionFeeAmount * 60 / 100;
 
         // CHANGE PRICE
-        int256 newPrice = int256(4_000 * COLLATERAL_MULTIPLIER);
+        int256 newPrice = int256(4_000 * PRICE_MULTIPLIER);
         priceFeedAdapter.setMarkPrices(newPrice, newPrice);
 
         // PARTIALLY CLOSE POSITION
         uint256 proportion = 50 * PERCENTAGE_MULTIPLIER / 100;
-        _partiallyClosePosition(BOB, tradePair0, positionId, newPrice, proportion);
+        _partiallyClosePosition(BOB_PK, tradeManager, tradePair0, positionId, newPrice, proportion);
 
         // ASSERT
         assertEq(collateral.balanceOf(BOB), balanceBob, "bob");
@@ -220,14 +223,15 @@ contract E2ETest is WithFullFixtures {
         // OPEN POSITION
         deal(address(collateral), BOB, INITIAL_BALANCE);
         vm.warp(1 hours);
-        uint256 positionId = _openPosition(BOB, tradePair0, INITIAL_BALANCE, LEVERAGE_0, false);
+        uint256 positionId =
+            _openPosition(BOB_PK, tradeManager, tradePair0, ASSET_PRICE_0, INITIAL_BALANCE, LEVERAGE_0, false);
         vm.roll(2);
 
         uint256 expectedBorrowFees = uint256((BASIS_BORROW_FEE_0) * 10 * int256(VOLUME_0) / FEE_MULTIPLIER);
         uint256 expectedFundingFees = uint256((FUNDING_FEE_0) * 10 * int256(VOLUME_0) / FEE_MULTIPLIER);
         uint256 liquidityAfterOpenFee = liquidityAmount + OPEN_POSITION_FEE_0 * 60 / 100 + expectedBorrowFees;
         uint256 payoutToBob = MARGIN_0 - expectedBorrowFees - expectedFundingFees;
-        uint256 closePositionFeeAmount = payoutToBob / 1000;
+        uint256 closePositionFeeAmount = VOLUME_0 / 1000;
         uint256 balanceBob = payoutToBob - closePositionFeeAmount;
         uint256 liquidityAfterCloseFee = liquidityAfterOpenFee + closePositionFeeAmount * 60 / 100;
 
@@ -235,7 +239,7 @@ contract E2ETest is WithFullFixtures {
         vm.warp(5 hours + 1 hours);
         vm.roll(3);
         vm.warp(10 hours + 1 hours);
-        _closePosition(BOB, tradePair0, positionId, ASSET_PRICE_0);
+        _closePosition(BOB_PK, tradeManager, tradePair0, positionId, ASSET_PRICE_0);
 
         // ASSERT
         assertEq(collateral.balanceOf(BOB), balanceBob, "bob");
@@ -267,29 +271,30 @@ contract E2ETest is WithFullFixtures {
 
         // OPEN POSITION
         deal(address(collateral), BOB, INITIAL_BALANCE);
-        uint256 positionId = _openPosition(BOB, tradePair0, INITIAL_BALANCE, LEVERAGE_0, false);
+        uint256 positionId =
+            _openPosition(BOB_PK, tradeManager, tradePair0, ASSET_PRICE_0, INITIAL_BALANCE, LEVERAGE_0, false);
         vm.roll(2);
 
         uint256 liquidityAfterOpenFee = liquidityAmount + OPEN_POSITION_FEE_0 * 60 / 100;
         uint256 payoutToBob = MARGIN_0 / 2 + liquidityAfterOpenFee;
-        uint256 closePositionFeeAmount = payoutToBob / 1000;
+        uint256 closePositionFeeAmount = VOLUME_0 / 2 / 1000;
         uint256 balanceBob = payoutToBob - closePositionFeeAmount;
         uint256 liquidityAfterCloseFee = closePositionFeeAmount * 60 / 100;
 
         uint256 payoutToBob2 = MARGIN_0 / 2 + liquidityAfterCloseFee;
-        uint256 closePositionFeeAmount2 = payoutToBob2 / 1000;
+        uint256 closePositionFeeAmount2 = VOLUME_0 / 2 / 1000;
         uint256 balanceBob2 = balanceBob + payoutToBob2 - closePositionFeeAmount2;
         uint256 liquidityAfterCloseFee2 = closePositionFeeAmount2 * 60 / 100;
 
         // CHANGE PRICE
-        int256 newPrice = int256(4_000 * COLLATERAL_MULTIPLIER);
+        int256 newPrice = int256(4_000 * PRICE_MULTIPLIER);
         priceFeedAdapter.setMarkPrices(newPrice, newPrice);
 
         // PARTIALLY CLOSE POSITION
         uint256 proportion = 50 * PERCENTAGE_MULTIPLIER / 100;
-        _partiallyClosePosition(BOB, tradePair0, positionId, newPrice, proportion);
+        _partiallyClosePosition(BOB_PK, tradeManager, tradePair0, positionId, newPrice, proportion);
         vm.roll(3);
-        _closePosition(BOB, tradePair0, positionId, newPrice);
+        _closePosition(BOB_PK, tradeManager, tradePair0, positionId, newPrice);
 
         // ASSERT
         assertEq(collateral.balanceOf(BOB), balanceBob2, "bob");
@@ -323,21 +328,22 @@ contract E2ETest is WithFullFixtures {
 
         // OPEN POSITION
         deal(address(collateral), BOB, INITIAL_BALANCE);
-        uint256 positionId = _openPosition(BOB, tradePair0, INITIAL_BALANCE, LEVERAGE_0, false);
+        uint256 positionId =
+            _openPosition(BOB_PK, tradeManager, tradePair0, ASSET_PRICE_0, INITIAL_BALANCE, LEVERAGE_0, false);
         vm.roll(2);
 
         uint256 liquidityAfterOpenFee = liquidityAmount + OPEN_POSITION_FEE_0 * 60 / 100;
         uint256 payoutToBob = MARGIN_0 / 2;
-        uint256 closePositionFeeAmount = payoutToBob / 1000;
+        uint256 closePositionFeeAmount = VOLUME_0 / 1000;
         uint256 balanceBob = payoutToBob - closePositionFeeAmount;
         uint256 liquidityAfterCloseFee = liquidityAfterOpenFee + MARGIN_0 / 2 + closePositionFeeAmount * 60 / 100;
 
         // CHANGE PRICE
-        int256 newPrice = int256(1_800 * COLLATERAL_MULTIPLIER);
+        int256 newPrice = int256(1_800 * PRICE_MULTIPLIER);
         priceFeedAdapter.setMarkPrices(newPrice, newPrice);
 
         // CLOSE POSITION
-        _closePosition(BOB, tradePair0, positionId, newPrice);
+        _closePosition(BOB_PK, tradeManager, tradePair0, positionId, newPrice);
 
         // ASSERT
         assertEq(collateral.balanceOf(BOB), balanceBob, "bob");
@@ -369,19 +375,21 @@ contract E2ETest is WithFullFixtures {
 
         // OPEN POSITION
         deal(address(collateral), BOB, INITIAL_BALANCE);
-        uint256 positionId = _openPosition(BOB, tradePair0, INITIAL_BALANCE, LEVERAGE_0, false);
+        uint256 positionId =
+            _openPosition(BOB_PK, tradeManager, tradePair0, ASSET_PRICE_0, INITIAL_BALANCE, LEVERAGE_0, false);
         vm.roll(2);
 
         // ADD MARGIN
         uint256 addedMargin = MARGIN_0 * 1001 / 1000;
         deal(address(collateral), BOB, addedMargin);
-        _addMarginToPosition(BOB, tradePair0, addedMargin, positionId, ASSET_PRICE_0);
+
+        _addMarginToPosition(BOB_PK, tradeManager, tradePair0, positionId, ASSET_PRICE_0, addedMargin);
         vm.roll(3);
 
-        _closePosition(BOB, tradePair0, positionId, ASSET_PRICE_0);
+        _closePosition(BOB_PK, tradeManager, tradePair0, positionId, ASSET_PRICE_0);
 
         // ASSERT
-        uint256 balanceBob = MARGIN_0 * 2 * 999 / 1000;
+        uint256 balanceBob = MARGIN_0 * 2 - VOLUME_0 / 1000;
         assertEq(collateral.balanceOf(BOB), balanceBob, "bob");
     }
 
@@ -396,14 +404,15 @@ contract E2ETest is WithFullFixtures {
         deal(address(collateral), BOB, INITIAL_BALANCE);
 
         vm.warp(10 hours);
-        uint256 positionId = _openPosition(BOB, tradePair0, INITIAL_BALANCE, LEVERAGE_0, false);
+        uint256 positionId =
+            _openPosition(BOB_PK, tradeManager, tradePair0, ASSET_PRICE_0, INITIAL_BALANCE, LEVERAGE_0, false);
         vm.roll(2);
 
         uint256 totalBorrowFees = uint256(BASIS_BORROW_FEE_0) * 10 * VOLUME_0 / uint256(FEE_MULTIPLIER);
         uint256 totalFundingFees = uint256(FUNDING_FEE_0) * 10 * VOLUME_0 / uint256(FEE_MULTIPLIER);
         uint256 totalFees = totalBorrowFees + totalFundingFees;
         uint256 payoutToBob = uint256(EQUITY_0_1) - totalFees;
-        uint256 closePositionFeeAmount = payoutToBob / 1000;
+        uint256 closePositionFeeAmount = VOLUME_0 / 1000;
         uint256 balanceBob = payoutToBob - closePositionFeeAmount;
         uint256 liquidity = liquidityAmount - uint256(PNL_0_1) + totalBorrowFees
             + (closePositionFeeAmount + OPEN_POSITION_FEE_0) * 60 / 100;
@@ -416,7 +425,7 @@ contract E2ETest is WithFullFixtures {
         vm.warp(20 hours);
 
         // CLOSE POSITION
-        _closePosition(BOB, tradePair0, positionId, newPrice);
+        _closePosition(BOB_PK, tradeManager, tradePair0, positionId, newPrice);
 
         // ASSERT
         assertEq(collateral.balanceOf(BOB), balanceBob, "bob");
@@ -448,11 +457,13 @@ contract E2ETest is WithFullFixtures {
 
         // OPEN POSITION
         deal(address(collateral), BOB, INITIAL_BALANCE);
-        uint256 positionIdBob = _openPosition(BOB, tradePair0, INITIAL_BALANCE, LEVERAGE_0, false);
+        uint256 positionIdBob =
+            _openPosition(BOB_PK, tradeManager, tradePair0, ASSET_PRICE_0, INITIAL_BALANCE, LEVERAGE_0, false);
 
         // OPEN POSITION
         deal(address(collateral), CAROL, INITIAL_BALANCE / 10);
-        uint256 positionIdCarol = _openPosition(CAROL, tradePair0, INITIAL_BALANCE / 10, LEVERAGE_0, true);
+        uint256 positionIdCarol =
+            _openPosition(CAROL_PK, tradeManager, tradePair0, ASSET_PRICE_0, INITIAL_BALANCE / 10, LEVERAGE_0, true);
 
         // GET FUNDING FEES
         (int256 fundingFeeLong, int256 fundingFeeShort) = tradeManager.getCurrentFundingFeeRates(address(tradePair0));
@@ -466,100 +477,47 @@ contract E2ETest is WithFullFixtures {
         priceFeedAdapter.setMarkPrices(ASSET_PRICE_0_2, ASSET_PRICE_0_2);
 
         int256 totalFeeCarol = (BASIS_BORROW_FEE_0 - FUNDING_FEE_0 * 10) * 24 * int256(VOLUME_0 / 10) / FEE_MULTIPLIER;
-        int256 checkFee = ITradePair(tradePair0).detailsOfPosition(positionIdCarol).totalFeeAmount;
+        int256 checkFee = ITradePair(tradePair0).detailsOfPosition(positionIdCarol).currentBorrowFeeAmount
+            + ITradePair(tradePair0).detailsOfPosition(positionIdCarol).currentFundingFeeAmount;
+
         // CLOSE POSITIONS
-        _closePosition(BOB, tradePair0, positionIdBob, ASSET_PRICE_0_2);
-        _closePosition(CAROL, tradePair0, positionIdCarol, ASSET_PRICE_0_2);
+        _closePosition(BOB_PK, tradeManager, tradePair0, positionIdBob, ASSET_PRICE_0_2);
+        _closePosition(CAROL_PK, tradeManager, tradePair0, positionIdCarol, ASSET_PRICE_0_2);
 
         // ASSERT FUNDING FEES
-        uint256 balanceBob = (
-            uint256(EQUITY_0_2) - uint256((FUNDING_FEE_0 + BASIS_BORROW_FEE_0) * 24 * int256(VOLUME_0) / FEE_MULTIPLIER)
-        ) * 999 / 1000;
-        uint256 balanceCarol = uint256(int256(MARGIN_0) / 10 - PNL_0_2 / 10 - totalFeeCarol) * 999 / 1000;
+        uint256 balanceBob = uint256(EQUITY_0_2) - VOLUME_0 / 1000
+            - uint256((FUNDING_FEE_0 + BASIS_BORROW_FEE_0) * 24 * int256(VOLUME_0) / FEE_MULTIPLIER);
+
+        uint256 balanceCarol = uint256(int256(MARGIN_0) / 10 - PNL_0_2 / 10 - totalFeeCarol) - VOLUME_0 / 10 / 1000;
 
         assertEq(checkFee, totalFeeCarol, "totalFeeCarol");
         assertEq(collateral.balanceOf(BOB), balanceBob, "balanceBob");
         assertEq(collateral.balanceOf(CAROL), balanceCarol, "balanceCarol");
     }
 
+    function testPaysOrderRewardOnOpenPosition() public {
+        controller.setOrderRewardOfCollateral(address(collateral), ORDER_REWARD);
+
+        // ADD LIQUIDITY
+        uint256 liquidityAmount = 100_000 * COLLATERAL_MULTIPLIER;
+        deal(address(collateral), ALICE, liquidityAmount);
+
+        _depositLiquidity(liquidityPool0, ALICE, liquidityAmount);
+
+        // OPEN POSITION
+        deal(address(collateral), BOB, INITIAL_BALANCE + ORDER_REWARD);
+
+        _openPosition(BOB_PK, tradeManager, tradePair0, ASSET_PRICE_0, INITIAL_BALANCE, LEVERAGE_0, false);
+
+        // ASSERT
+        assertEq(collateral.balanceOf(address(liquidityPool0)), liquidityAmount + OPEN_POSITION_FEE_0 * 60 / 100, "LP0");
+        assertEq(collateral.balanceOf(BACKEND), ORDER_REWARD, "order reward");
+
+        assertEq(collateral.balanceOf(address(tradePair0)), MARGIN_0, "tradePair0");
+        assertEq(collateral.balanceOf(BOB), 0, "bob");
+    }
+
     /* ========== HELPER FUNCTIONS =========== */
-
-    function _closePosition(address user, ITradePair tradePair, uint256 positionId, int256 constraintPrice)
-        private
-        prank(user)
-    {
-        ClosePositionParams memory closePositionParams = ClosePositionParams(address(tradePair), positionId);
-        Constraints memory constraints =
-            Constraints(block.timestamp + 1 hours, constraintPrice * 99 / 100, constraintPrice * 101 / 100);
-        UpdateData[] memory updateData;
-
-        tradeManager.closePosition(closePositionParams, constraints, updateData);
-    }
-
-    function _addMarginToPosition(
-        address user,
-        ITradePair tradePair,
-        uint256 addedMargin,
-        uint256 positionId,
-        int256 constraintPrice
-    ) private prank(user) {
-        AddMarginToPositionParams memory addMarginPositionParams =
-            AddMarginToPositionParams(address(tradePair), positionId, addedMargin);
-        Constraints memory constraints =
-            Constraints(block.timestamp + 1 hours, constraintPrice * 99 / 100, constraintPrice * 101 / 100);
-        UpdateData[] memory updateData;
-
-        collateral.approve(address(tradeManager), addedMargin);
-
-        tradeManager.addMarginToPosition(addMarginPositionParams, constraints, updateData);
-    }
-
-    function _removeMarginFromPosition(
-        address user,
-        ITradePair tradePair,
-        uint256 removedMargin,
-        uint256 positionId,
-        int256 constraintPrice
-    ) private prank(user) {
-        RemoveMarginFromPositionParams memory addMarginPositionParams =
-            RemoveMarginFromPositionParams(address(tradePair), positionId, removedMargin);
-        Constraints memory constraints =
-            Constraints(block.timestamp + 1 hours, constraintPrice * 99 / 100, constraintPrice * 101 / 100);
-        UpdateData[] memory updateData;
-
-        tradeManager.removeMarginFromPosition(addMarginPositionParams, constraints, updateData);
-    }
-
-    function _partiallyClosePosition(
-        address user,
-        ITradePair tradePair,
-        uint256 positionId,
-        int256 constraintPrice,
-        uint256 proportion
-    ) private prank(user) {
-        PartiallyClosePositionParams memory partiallyClosePositionParams =
-            PartiallyClosePositionParams(address(tradePair), positionId, proportion);
-        Constraints memory constraints =
-            Constraints(block.timestamp + 1 hours, constraintPrice * 99 / 100, constraintPrice * 101 / 100);
-        UpdateData[] memory updateData;
-
-        tradeManager.partiallyClosePosition(partiallyClosePositionParams, constraints, updateData);
-    }
-
-    function _openPosition(address user, ITradePair tradePair, uint256 margin, uint256 leverage, bool isShort)
-        private
-        prank(user)
-        returns (uint256)
-    {
-        OpenPositionParams memory openPositionParams =
-            OpenPositionParams(address(tradePair), margin, leverage, isShort, address(0), address(0));
-        Constraints memory constraints =
-            Constraints(block.timestamp + 1 hours, ASSET_PRICE_0 * 99 / 100, ASSET_PRICE_0 * 101 / 100);
-        UpdateData[] memory updateData;
-
-        collateral.approve(address(tradeManager), margin);
-        return tradeManager.openPosition(openPositionParams, constraints, updateData);
-    }
 
     function _depositLiquidity(ILiquidityPool liquidityPool, address user, uint256 amount)
         private
@@ -568,11 +526,5 @@ contract E2ETest is WithFullFixtures {
     {
         collateral.approve(address(liquidityPool), amount);
         shares = liquidityPool.deposit(amount, 0);
-    }
-
-    modifier prank(address executor) {
-        vm.startPrank(executor);
-        _;
-        vm.stopPrank();
     }
 }

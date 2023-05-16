@@ -2,6 +2,7 @@
 
 pragma solidity 0.8.17;
 
+import "lib/openzeppelin-contracts/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import "src/price-feed/ChainlinkUsdPriceFeed.sol";
 import "test/mocks/MockV3Aggregator.sol";
 import "../setup/WithMocks.t.sol";
@@ -17,11 +18,17 @@ contract LiquidityPoolAdapterTest is WithMocks {
     MockLiquidityPool private mockLiquidityPool3;
 
     function setUp() public {
-        liquidityPoolAdapter = new LiquidityPoolAdapter(
+        LiquidityPoolAdapter liquidityPoolAdapterImplementation = new LiquidityPoolAdapter(
             mockUnlimitedOwner,
             mockController,
             address(mockFeeManager),
             collateral
+        );
+
+        liquidityPoolAdapter = LiquidityPoolAdapter(
+            address(
+                new TransparentUpgradeableProxy(address(liquidityPoolAdapterImplementation), address(mockUnlimitedOwner), "")
+            )
         );
 
         mockLiquidityPool2 = new MockLiquidityPool(collateral);

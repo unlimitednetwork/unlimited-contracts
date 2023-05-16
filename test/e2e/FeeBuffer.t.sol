@@ -5,7 +5,7 @@ pragma solidity 0.8.17;
 import "test/setup/WithFullFixtures.t.sol";
 
 contract FeeBufferAtLiquidationTest is WithFullFixtures {
-    // This test cpmrises multiple test cases, to make sure that fee calculation works in a consistent manner.
+    // This test comprises multiple test cases, to make sure that fee calculation works in a consistent manner.
     // All test cases expose a position to a total of 10 hours of fee payment, and then a liquidation.
     // The amounts send to the maker, liquidator, tradepair, feemanager, and liquiditypool should be equal after each test.
     MockToken collateral;
@@ -22,10 +22,10 @@ contract FeeBufferAtLiquidationTest is WithFullFixtures {
     uint256 expectedFundingFees = uint256((FUNDING_FEE_0) * 50 * int256(VOLUME_0) / FEE_MULTIPLIER);
     // LP gets 100% of (borrow fees - liquidatorReward), 60% open and close fees,
     uint256 expectedLiquidity = liquidityAmount - MARGIN_0 + expectedBorrowFees - LIQUIDATOR_REWARD
-        + uint256(OPEN_POSITION_FEE_0 + (MARGIN_0) / 1000) * 6 / 10;
+        + uint256(OPEN_POSITION_FEE_0 + (VOLUME_0) / 1000) * 6 / 10;
 
-    // bob receives the equity minues the liquidator reward and pays the close fee
-    uint256 expectedPayoutBob = (MARGIN_0) * 999 / 1000;
+    // bob receives the equity/margin and pays the close fee which is based on volume
+    uint256 expectedPayoutBob = (MARGIN_0) - VOLUME_0 / 1000;
 
     function setUp() public {
         vm.warp(1 hours);
@@ -58,7 +58,8 @@ contract FeeBufferAtLiquidationTest is WithFullFixtures {
 
         // OPEN SHORT POSITION
         deal(address(collateral), BOB, INITIAL_BALANCE);
-        positionIdBob = _openPosition(BOB, tradePair0, INITIAL_BALANCE, LEVERAGE_0, true);
+        positionIdBob =
+            _openPosition(BOB_PK, tradeManager, tradePair0, ASSET_PRICE_0, INITIAL_BALANCE, LEVERAGE_0, true);
     }
 
     function testNormalLiquidation() public {
@@ -89,11 +90,15 @@ contract FeeBufferAtLiquidationTest is WithFullFixtures {
         // Increase time by 25 hours (=50% of margin)
         vm.warp(25 hours + 1 hours);
         vm.roll(2);
+        assertEq(collateral.balanceOf(BOB), 0, "bob after open");
 
         priceFeedAdapter.setMarkPrices(ASSET_PRICE_0_3, ASSET_PRICE_0_3);
-        _partiallyClosePosition(BOB, tradePair0, positionIdBob, ASSET_PRICE_0_3, 500_000);
+        _partiallyClosePosition(BOB_PK, tradeManager, tradePair0, positionIdBob, ASSET_PRICE_0_3, 500_000);
 
-        assertEq(collateral.balanceOf(BOB), expectedPayoutBob * 3 / 4, "bob after partially close");
+        // Bob should have received 50% of the 50%-reduced margin, and 50% of the PnL (=75% of margin)
+        // minus 50% of the fee
+        uint256 expectedPayoutBob_PartiallyClose = MARGIN_0 * 3 / 4 - VOLUME_0 / 1000 / 2;
+        assertEq(collateral.balanceOf(BOB), expectedPayoutBob_PartiallyClose, "bob after partially close");
 
         // Increase time by another 50 hours (=50% of margin) and decrease price to 1_600 (+100% pnl)
         // Even though fee is massively overcollected.
@@ -118,67 +123,6 @@ contract FeeBufferAtLiquidationTest is WithFullFixtures {
         tradeManager.liquidatePosition(address(tradePair), positionId, updateData);
     }
 
-    function _closePosition(address user, ITradePair tradePair, uint256 positionId, int256 constraintPrice)
-        private
-        prank(user)
-    {
-        ClosePositionParams memory closePositionParams = ClosePositionParams(address(tradePair), positionId);
-        Constraints memory constraints =
-            Constraints(block.timestamp + 1 hours, constraintPrice * 99 / 100, constraintPrice * 101 / 100);
-        UpdateData[] memory updateData;
-
-        tradeManager.closePosition(closePositionParams, constraints, updateData);
-    }
-
-    function _partiallyClosePosition(
-        address user,
-        ITradePair tradePair,
-        uint256 positionId,
-        int256 constraintPrice,
-        uint256 proportion
-    ) private prank(user) {
-        PartiallyClosePositionParams memory partiallyClosePositionParams =
-            PartiallyClosePositionParams(address(tradePair), positionId, proportion);
-        Constraints memory constraints =
-            Constraints(block.timestamp + 1 hours, constraintPrice * 99 / 100, constraintPrice * 101 / 100);
-        UpdateData[] memory updateData;
-
-        tradeManager.partiallyClosePosition(partiallyClosePositionParams, constraints, updateData);
-    }
-
-    function _extendPosition(
-        address user,
-        ITradePair tradePair,
-        uint256 positionId,
-        uint256 addedMargin,
-        uint256 addedLeverage,
-        int256 constraintPrice
-    ) private prank(user) {
-        ExtendPositionParams memory extendPositionParams =
-            ExtendPositionParams(address(tradePair), positionId, addedMargin, addedLeverage);
-        Constraints memory constraints =
-            Constraints(block.timestamp + 1 hours, constraintPrice * 99 / 100, constraintPrice * 101 / 100);
-        UpdateData[] memory updateData;
-
-        collateral.approve(address(tradeManager), addedMargin);
-        tradeManager.extendPosition(extendPositionParams, constraints, updateData);
-    }
-
-    function _openPosition(address user, ITradePair tradePair, uint256 margin, uint256 leverage, bool isShort)
-        private
-        prank(user)
-        returns (uint256)
-    {
-        OpenPositionParams memory openPositionParams =
-            OpenPositionParams(address(tradePair), margin, leverage, isShort, address(0), address(0));
-        Constraints memory constraints =
-            Constraints(block.timestamp + 1 hours, ASSET_PRICE_0 * 99 / 100, ASSET_PRICE_0 * 101 / 100);
-        UpdateData[] memory updateData;
-
-        collateral.approve(address(tradeManager), margin);
-        return tradeManager.openPosition(openPositionParams, constraints, updateData);
-    }
-
     function _depositLiquidity(ILiquidityPool liquidityPool, address user, uint256 amount)
         private
         prank(user)
@@ -186,11 +130,5 @@ contract FeeBufferAtLiquidationTest is WithFullFixtures {
     {
         collateral.approve(address(liquidityPool), amount);
         shares = liquidityPool.deposit(amount, 0);
-    }
-
-    modifier prank(address executor) {
-        vm.startPrank(executor);
-        _;
-        vm.stopPrank();
     }
 }

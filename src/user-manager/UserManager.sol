@@ -110,6 +110,9 @@ contract UserManager is IUserManager, UnlimitedOwnable, Initializable {
     /// @notice Defines volume for each tier.
     FeeVolumes public feeVolumes;
 
+    // Storage gap
+    uint256[50] __gap;
+
     /* ========== CONSTRUCTOR ========== */
 
     /**
@@ -134,7 +137,7 @@ contract UserManager is IUserManager, UnlimitedOwnable, Initializable {
 
         _setFeeSize(0, feeSizes_[0]);
 
-        for (uint256 i = 0; i < feeVolumes_.length; i++) {
+        for (uint256 i; i < feeVolumes_.length; ++i) {
             _setFeeVolume(i + 1, feeVolumes_[i]);
             _setFeeSize(i + 1, feeSizes_[i + 1]);
         }
@@ -257,7 +260,7 @@ contract UserManager is IUserManager, UnlimitedOwnable, Initializable {
      * @return user30dayVolume users last 30 days volume
      */
     function getUser30DaysVolume(address user_) public view returns (uint256 user30dayVolume) {
-        for (uint256 i = 0; i < 30; i++) {
+        for (uint256 i; i < 30; ++i) {
             (uint256 index, uint256 position) = _getPastIndexAndPosition(i);
             uint256 userDailyVolume = _getUserDailyVolume(user_, index, position);
 
@@ -352,7 +355,7 @@ contract UserManager is IUserManager, UnlimitedOwnable, Initializable {
     function setFeeSizes(uint256[] calldata feeIndexes, uint8[] calldata feeSizes_) external onlyOwner {
         require(feeIndexes.length == feeSizes_.length, "UserManager::setFeeSizes: Array lengths don't match");
 
-        for (uint256 i = 0; i < feeIndexes.length; i++) {
+        for (uint256 i; i < feeIndexes.length; ++i) {
             _setFeeSize(feeIndexes[i], feeSizes_[i]);
         }
     }
@@ -372,7 +375,7 @@ contract UserManager is IUserManager, UnlimitedOwnable, Initializable {
     function setFeeVolumes(uint256[] calldata feeIndexes, uint32[] calldata feeVolumes_) external onlyOwner {
         require(feeIndexes.length == feeVolumes_.length, "UserManager::setFeeVolumes: Array lengths don't match");
 
-        for (uint256 i = 0; i < feeIndexes.length; i++) {
+        for (uint256 i; i < feeIndexes.length; ++i) {
             _setFeeVolume(feeIndexes[i], feeVolumes_[i]);
         }
     }

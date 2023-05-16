@@ -49,19 +49,8 @@ contract TradeManager is ITradeManager {
     /**
      * @notice Opens a position for a trading pair.
      * @param params_ The parameters for opening a position.
-     * @param constraints_ Deadline and price constraints for the transaction.
-     * @param updateData_ Possible update data for updatable contracts.
+     * @param maker_ Maker of the position
      */
-    function openPosition(
-        OpenPositionParams calldata params_,
-        Constraints calldata constraints_,
-        UpdateData[] calldata updateData_
-    ) external onlyActiveTradePair(params_.tradePair) returns (uint256) {
-        _updateContracts(updateData_);
-        _verifyConstraints(params_.tradePair, constraints_, params_.isShort ? UsePrice.MAX : UsePrice.MIN);
-        return _openPosition(params_, msg.sender);
-    }
-
     function _openPosition(OpenPositionParams memory params_, address maker_) internal returns (uint256) {
         ITradePair(params_.tradePair).collateral().safeTransferFrom(maker_, address(params_.tradePair), params_.margin);
 
@@ -80,22 +69,8 @@ contract TradeManager is ITradeManager {
      * @notice Closes a position for a trading pair.
      *
      * @param params_ The parameters for closing the position.
-     * @param constraints_ Deadline and price constraints for the transaction.
-     * @param updateData_ Possible update data for updatable contracts.
+     * @param maker_ Maker of the position
      */
-    function closePosition(
-        ClosePositionParams calldata params_,
-        Constraints calldata constraints_,
-        UpdateData[] calldata updateData_
-    ) external onlyActiveTradePair(params_.tradePair) {
-        _updateContracts(updateData_);
-        // Verify Constraints
-        PositionDetails memory positionDetails = ITradePair(params_.tradePair).detailsOfPosition(params_.positionId);
-        _verifyConstraints(params_.tradePair, constraints_, positionDetails.isShort ? UsePrice.MAX : UsePrice.MIN);
-
-        _closePosition(params_, msg.sender);
-    }
-
     function _closePosition(ClosePositionParams memory params_, address maker_) internal {
         ITradePair(params_.tradePair).closePosition(maker_, params_.positionId);
         emit PositionClosed(params_.tradePair, params_.positionId);
@@ -104,22 +79,8 @@ contract TradeManager is ITradeManager {
     /**
      * @notice Partially closes a position on a trade pair.
      * @param params_ The parameters for partially closing the position.
-     * @param constraints_ Deadline and price constraints for the transaction.
-     * @param updateData_ Possible update data for updatable contracts.
+     * @param maker_ Maker of the position
      */
-    function partiallyClosePosition(
-        PartiallyClosePositionParams calldata params_,
-        Constraints calldata constraints_,
-        UpdateData[] calldata updateData_
-    ) public onlyActiveTradePair(params_.tradePair) {
-        _updateContracts(updateData_);
-        // Verify Constraints
-        PositionDetails memory positionDetails = ITradePair(params_.tradePair).detailsOfPosition(params_.positionId);
-        _verifyConstraints(params_.tradePair, constraints_, positionDetails.isShort ? UsePrice.MAX : UsePrice.MIN);
-
-        _partiallyClosePosition(params_, msg.sender);
-    }
-
     function _partiallyClosePosition(PartiallyClosePositionParams memory params_, address maker_) internal {
         ITradePair(params_.tradePair).partiallyClosePosition(maker_, params_.positionId, params_.proportion);
         emit PositionPartiallyClosed(params_.tradePair, params_.positionId, params_.proportion);
@@ -128,23 +89,8 @@ contract TradeManager is ITradeManager {
     /**
      * @notice Removes margin from a position
      * @param params_ The parameters for removing margin from the position.
-     * @param constraints_ Deadline and price constraints for the transaction.
-     * @param updateData_ Possible update data for updatable contracts.
+     * @param maker_ Maker of the position
      */
-    function removeMarginFromPosition(
-        RemoveMarginFromPositionParams calldata params_,
-        Constraints calldata constraints_,
-        UpdateData[] calldata updateData_
-    ) public onlyActiveTradePair(params_.tradePair) {
-        _updateContracts(updateData_);
-
-        // Verify Constraints
-        PositionDetails memory positionDetails = ITradePair(params_.tradePair).detailsOfPosition(params_.positionId);
-        _verifyConstraints(params_.tradePair, constraints_, positionDetails.isShort ? UsePrice.MAX : UsePrice.MIN);
-
-        _removeMarginFromPosition(params_, msg.sender);
-    }
-
     function _removeMarginFromPosition(RemoveMarginFromPositionParams memory params_, address maker_) internal {
         ITradePair(params_.tradePair).removeMarginFromPosition(maker_, params_.positionId, params_.removedMargin);
 
@@ -154,24 +100,8 @@ contract TradeManager is ITradeManager {
     /**
      * @notice Adds margin to a position
      * @param params_ The parameters for adding margin to the position.
-     * @param constraints_ Deadline and price constraints for the transaction.
-     * @param updateData_ Possible update data for updatable contracts.
+     * @param maker_ Maker of the position
      */
-    function addMarginToPosition(
-        AddMarginToPositionParams calldata params_,
-        Constraints calldata constraints_,
-        UpdateData[] calldata updateData_
-    ) public onlyActiveTradePair(params_.tradePair) {
-        _updateContracts(updateData_);
-
-        // Verify Constraints
-        PositionDetails memory positionDetails = ITradePair(params_.tradePair).detailsOfPosition(params_.positionId);
-        _verifyConstraints(params_.tradePair, constraints_, positionDetails.isShort ? UsePrice.MAX : UsePrice.MIN);
-
-        // Call Add Margin
-        _addMarginToPosition(params_, msg.sender);
-    }
-
     function _addMarginToPosition(AddMarginToPositionParams memory params_, address maker_) internal {
         // Transfer Collateral to TradePair
         ITradePair(params_.tradePair).collateral().safeTransferFrom(
@@ -186,23 +116,8 @@ contract TradeManager is ITradeManager {
     /**
      * @notice Extends position with margin and loan.
      * @param params_ The parameters for extending the position.
-     * @param constraints_ Deadline and price constraints for the transaction.
-     * @param updateData_ Possible update data for updatable contracts.
+     * @param maker_ Maker of the position
      */
-    function extendPosition(
-        ExtendPositionParams calldata params_,
-        Constraints calldata constraints_,
-        UpdateData[] calldata updateData_
-    ) public onlyActiveTradePair(params_.tradePair) {
-        _updateContracts(updateData_);
-
-        // Verify Constraints
-        PositionDetails memory positionDetails = ITradePair(params_.tradePair).detailsOfPosition(params_.positionId);
-        _verifyConstraints(params_.tradePair, constraints_, positionDetails.isShort ? UsePrice.MAX : UsePrice.MIN);
-
-        _extendPosition(params_, msg.sender);
-    }
-
     function _extendPosition(ExtendPositionParams memory params_, address maker_) internal {
         // Transfer Collateral to TradePair
         ITradePair(params_.tradePair).collateral().safeTransferFrom(
@@ -219,23 +134,8 @@ contract TradeManager is ITradeManager {
     /**
      * @notice Extends position with loan to target leverage.
      * @param params_ The parameters for extending the position to target leverage.
-     * @param constraints_ Deadline and price constraints for the transaction.
-     * @param updateData_ Possible update data for updatable contracts.
+     * @param maker_ Maker of the position
      */
-    function extendPositionToLeverage(
-        ExtendPositionToLeverageParams calldata params_,
-        Constraints calldata constraints_,
-        UpdateData[] calldata updateData_
-    ) public onlyActiveTradePair(params_.tradePair) {
-        _updateContracts(updateData_);
-
-        // Verify Constraints
-        PositionDetails memory positionDetails = ITradePair(params_.tradePair).detailsOfPosition(params_.positionId);
-        _verifyConstraints(params_.tradePair, constraints_, positionDetails.isShort ? UsePrice.MAX : UsePrice.MIN);
-
-        _extendPositionToLeverage(params_, msg.sender);
-    }
-
     function _extendPositionToLeverage(ExtendPositionToLeverageParams memory params_, address maker_) internal {
         ITradePair(params_.tradePair).extendPositionToLeverage(maker_, params_.positionId, params_.targetLeverage);
 
@@ -298,7 +198,7 @@ contract TradeManager is ITradeManager {
 
         didLiquidate = new bool[][](tradePairs.length);
 
-        for (uint256 i = 0; i < tradePairs.length; i++) {
+        for (uint256 i; i < tradePairs.length; ++i) {
             didLiquidate[i] =
                 _batchLiquidatePositionsOfTradePair(tradePairs[i], positionIds[i], allowRevert, msg.sender);
         }
@@ -319,7 +219,7 @@ contract TradeManager is ITradeManager {
     ) internal returns (bool[] memory didLiquidate) {
         didLiquidate = new bool[](positionIds.length);
 
-        for (uint256 i = 0; i < positionIds.length; i++) {
+        for (uint256 i; i < positionIds.length; ++i) {
             if (_tryLiquidatePosition(tradePair, positionIds[i], maker_)) {
                 didLiquidate[i] = true;
             } else {
@@ -376,25 +276,73 @@ contract TradeManager is ITradeManager {
             "TradeManager::canLiquidatePositions: TradePair and PositionId arrays must be of same length"
         );
         canLiquidate = new bool[][](tradePairs_.length);
-        for (uint256 i = 0; i < tradePairs_.length; i++) {
+        for (uint256 i; i < tradePairs_.length; ++i) {
             // for positionId in positionIds_
             canLiquidate[i] = _canLiquidatePositionsAtTradePair(tradePairs_[i], positionIds_[i]);
         }
     }
 
     /**
+     * @notice Indicates if the positions are liquidatable at a given price. Used for external liquidation simulation.
+     * @param tradePairs_ addresses of the trade pairs
+     * @param positionIds_ ids of the positions
+     * @param prices_ price to check if positions are liquidatable at
+     * @return canLiquidate array of bools indicating if the positions are liquidatable
+     * @dev Requirements:
+     *
+     * - tradePairs_ and positionIds_ must have the same length
+     */
+    function canLiquidatePositionsAtPrices(
+        address[] calldata tradePairs_,
+        uint256[][] calldata positionIds_,
+        int256[] calldata prices_
+    ) external view returns (bool[][] memory canLiquidate) {
+        require(
+            tradePairs_.length == positionIds_.length,
+            "TradeManager::canLiquidatePositions: tradePairs_ and positionIds_ arrays must be of same length"
+        );
+        require(
+            tradePairs_.length == prices_.length,
+            "TradeManager::canLiquidatePositions: tradePairs_ and prices_ arrays must be of same length"
+        );
+        canLiquidate = new bool[][](tradePairs_.length);
+        for (uint256 i; i < tradePairs_.length; ++i) {
+            // for positionId in positionIds_
+            canLiquidate[i] = _canLiquidatePositionsAtPriceAtTradePair(tradePairs_[i], positionIds_[i], prices_[i]);
+        }
+    }
+
+    /**
+     * @notice Indicates if the positions are liquidatable at a given price.
+     * @param tradePair_ address of the trade pair
+     * @param positionIds_ ids of the positions
+     * @return canLiquidate array of bools indicating if the positions are liquidatable
+     */
+    function _canLiquidatePositionsAtPriceAtTradePair(
+        address tradePair_,
+        uint256[] calldata positionIds_,
+        int256 price_
+    ) internal view returns (bool[] memory) {
+        bool[] memory canLiquidate = new bool[](positionIds_.length);
+        for (uint256 i; i < positionIds_.length; ++i) {
+            canLiquidate[i] = ITradePair(tradePair_).positionIsLiquidatableAtPrice(positionIds_[i], price_);
+        }
+        return canLiquidate;
+    }
+    /**
      * @notice Indicates if the positions are liquidatable
      * @param tradePair_ address of the trade pair
      * @param positionIds_ ids of the positions
      * @return canLiquidate array of bools indicating if the positions are liquidatable
      */
+
     function _canLiquidatePositionsAtTradePair(address tradePair_, uint256[] calldata positionIds_)
         internal
         view
         returns (bool[] memory)
     {
         bool[] memory canLiquidate = new bool[](positionIds_.length);
-        for (uint256 i = 0; i < positionIds_.length; i++) {
+        for (uint256 i; i < positionIds_.length; ++i) {
             canLiquidate[i] = positionIsLiquidatable(tradePair_, positionIds_[i]);
         }
         return canLiquidate;
@@ -415,12 +363,13 @@ contract TradeManager is ITradeManager {
     }
 
     /**
-     * @notice Returns the maximum size in assets of a tradePair
+     * @notice Returns the total volume limit of a trade pair. Total Volume Limit is the maximum amount of volume for
+     * each trade side.
      * @param tradePair_ address of the trade pair
-     * @return maxSize maximum size
+     * @return totalVolumeLimit
      */
-    function totalSizeLimitOfTradePair(address tradePair_) external view returns (uint256) {
-        return ITradePair(tradePair_).totalSizeLimit();
+    function totalVolumeLimitOfTradePair(address tradePair_) external view returns (uint256) {
+        return ITradePair(tradePair_).totalVolumeLimit();
     }
 
     /**
@@ -458,7 +407,7 @@ contract TradeManager is ITradeManager {
      * @dev Updates all updatdable contracts. Reverts if one update operation is invalid or not successfull.
      */
     function _updateContracts(UpdateData[] calldata updateData_) internal {
-        for (uint256 i; i < updateData_.length; i++) {
+        for (uint256 i; i < updateData_.length; ++i) {
             require(
                 controller.isUpdatable(updateData_[i].updatableContract),
                 "TradeManager::_updateContracts: Contract not updatable"

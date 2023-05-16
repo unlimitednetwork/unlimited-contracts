@@ -31,7 +31,9 @@ contract FundingFeeTest is Test, WithTradePair {
         tradePair.openPosition(address(ALICE), INITIAL_BALANCE, LEVERAGE_0, IS_SHORT_0, WHITELABEL_ADDRESS_0);
         vm.warp(1 hours);
         PositionDetails memory positionDetails = tradePair.detailsOfPosition(0);
-        assertEq(uint256(positionDetails.equity), MARGIN_0 - uint256(TOTAL_FEE_AMOUNT_AFTER_1H));
+        assertEq(
+            positionDetails.currentBorrowFeeAmount + positionDetails.currentFundingFeeAmount, TOTAL_FEE_AMOUNT_AFTER_1H
+        );
     }
 
     function testPositionFeeWithCollection() public {
@@ -43,6 +45,8 @@ contract FundingFeeTest is Test, WithTradePair {
         // fees get collected every position alteration
         tradePair.openPosition(address(ALICE), INITIAL_BALANCE, LEVERAGE_0, IS_SHORT_0, WHITELABEL_ADDRESS_0);
         PositionDetails memory positionDetails = tradePair.detailsOfPosition(0);
-        assertEq(uint256(positionDetails.equity), MARGIN_0 - uint256(TOTAL_FEE_AMOUNT_AFTER_1H));
+        assertEq(
+            positionDetails.currentBorrowFeeAmount + positionDetails.currentFundingFeeAmount, TOTAL_FEE_AMOUNT_AFTER_1H
+        );
     }
 }

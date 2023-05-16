@@ -79,7 +79,7 @@ contract TradePairPnLTest is Test, WithTradePair {
 
         // ACT
         mockPriceFeedAdapter.setMarkPrices(ASSET_PRICE_0_3, ASSET_PRICE_0_3);
-        tradePair.closePosition(address(ALICE), positionId);
+        tradePair.liquidatePosition(address(BOB), positionId);
 
         // ASSERT
         assertEq(collateral.balanceOf(ALICE), 0, "balance of ALICE");
@@ -91,8 +91,20 @@ contract TradePairPnLTest is Test, WithTradePair {
         );
         assertEq(
             collateral.balanceOf(address(mockLiquidityPoolAdapter)),
-            uint256(int256(LIQUIDITY_0) - PNL_0_3 - int256(CLOSE_POSITION_FEE_0_3)),
+            uint256(int256(LIQUIDITY_0) - PNL_0_3 - int256(CLOSE_POSITION_FEE_0_3)) - LIQUIDATOR_REWARD,
             "remaining liquidity"
         );
+    }
+
+    function test_cannotCloseLiquidatablePosition() public {
+        // ARRANGE
+        uint256 positionId =
+            tradePair.openPosition(address(ALICE), INITIAL_BALANCE, LEVERAGE_0, IS_SHORT_0, WHITELABEL_ADDRESS_0);
+        vm.roll(2);
+
+        // ACT
+        mockPriceFeedAdapter.setMarkPrices(ASSET_PRICE_0_3, ASSET_PRICE_0_3);
+        vm.expectRevert("TradePair::_verifyPositionsValidity: position would be liquidatable");
+        tradePair.closePosition(address(ALICE), positionId);
     }
 }

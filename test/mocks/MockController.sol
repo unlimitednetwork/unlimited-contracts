@@ -34,6 +34,14 @@ contract MockController is IController {
         return true;
     }
 
+    function isOrderExecutor(address) external pure override returns (bool) {
+        return true;
+    }
+
+    function orderRewardOfCollateral(address) external pure returns (uint256) {
+        return 0;
+    }
+
     function checkTradePairActive(address) external view {}
 
     function pause() external {}
@@ -52,6 +60,8 @@ contract MockController is IController {
 
     function addSigner(address) external {}
 
+    function addOrderExecutor(address) external {}
+
     function removeTradePair(address) external {}
 
     function removeLiquidityPool(address) external {}
@@ -63,4 +73,8 @@ contract MockController is IController {
     function removeUpdatable(address) external {}
 
     function removeSigner(address) external {}
+
+    function removeOrderExecutor(address) external {}
+
+    function setOrderRewardOfCollateral(address, uint256) external {}
 }

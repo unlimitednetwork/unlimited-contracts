@@ -2,6 +2,7 @@
 
 pragma solidity 0.8.17;
 
+import "lib/openzeppelin-contracts/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import "src/trade-pair/TradePair.sol";
 import "test/setup/WithMocks.t.sol";
 
@@ -14,21 +15,17 @@ contract WithTradePair is WithMocks {
     function deployTradePair() public {
         // Deploy
         vm.warp(0);
-        tradePair = new TradePair(
+        TradePair tradePairImplementation = new TradePair(
             mockUnlimitedOwner,
             mockTradeManager,
             mockUserManager,
             mockFeeManager
         );
+        tradePair =
+            TradePair(address(new TransparentUpgradeableProxy(address(tradePairImplementation), address(1), "")));
 
         vm.startPrank(UNLIMITED_OWNER);
-        tradePair.initialize({
-            name: "Ethereum Trade Pair",
-            collateral: collateral,
-            assetDecimals: ASSET_DECIMALS,
-            priceFeedAdapter: mockPriceFeedAdapter,
-            liquidityPoolAdapter: mockLiquidityPoolAdapter
-        });
+        tradePair.initialize("Ethereum Trade Pair", collateral, mockPriceFeedAdapter, mockLiquidityPoolAdapter);
 
         // Configure
         tradePair.setLiquidatorReward(LIQUIDATOR_REWARD);
@@ -40,7 +37,7 @@ contract WithTradePair is WithMocks {
         tradePair.setMaxFundingFeeRate(FUNDING_FEE_0);
         tradePair.setMaxExcessRatio(MAX_EXCESS_RATIO);
         tradePair.setFeeBufferFactor(BUFFER_FACTOR);
-        tradePair.setTotalSizeLimit(TOTAL_ASSET_AMOUNT_LIMIT);
+        tradePair.setTotalVolumeLimit(TOTAL_VOLUME_LIMIT);
 
         vm.stopPrank();
         vm.prank(ALICE);

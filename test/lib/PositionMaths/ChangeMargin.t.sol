@@ -5,11 +5,10 @@ pragma solidity 0.8.17;
 import "forge-std/Test.sol";
 import "src/lib/PositionMaths.sol";
 import "test/setup/Constants.sol";
+import "test/setup/WithPositionMaths.t.sol";
 
-contract ChangeMarginOfPositionTest is Test {
+contract ChangeMarginOfPositionTest is Test, WithPositionMaths {
     using PositionMaths for Position;
-
-    Position position;
 
     function setUp() public {
         vm.warp(0);
@@ -21,11 +20,12 @@ contract ChangeMarginOfPositionTest is Test {
             lastBorrowFeeAmount: 0,
             pastFundingFeeIntegral: 0,
             lastFundingFeeAmount: 0,
+            collectedFundingFeeAmount: 0,
+            collectedBorrowFeeAmount: 0,
             lastFeeCalculationAt: uint48(block.timestamp),
             openedAt: uint48(block.timestamp),
             isShort: IS_SHORT_0,
             owner: msg.sender,
-            assetDecimals: ASSET_DECIMALS,
             lastAlterationBlock: uint40(block.number)
         });
     }

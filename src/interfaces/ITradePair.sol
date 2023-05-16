@@ -37,12 +37,9 @@ struct PositionDetails {
     uint256 leverage;
     bool isShort;
     int256 entryPrice;
-    int256 markPrice;
-    int256 bankruptcyPrice;
-    int256 equity;
-    int256 PnL;
-    int256 totalFeeAmount;
-    uint256 currentVolume;
+    int256 liquidationPrice;
+    int256 currentBorrowFeeAmount;
+    int256 currentFundingFeeAmount;
 }
 
 /**
@@ -78,21 +75,61 @@ interface ITradePair {
         PositionAlterationType alterationType, uint256 id, uint256 netMargin, uint256 volume, uint256 size
     );
 
+    event UpdatedFeesOfPosition(uint256 id, int256 totalFeeAmount, uint256 lastNetMargin);
+
+    event DepositedOpenFees(address user, uint256 amount, uint256 positionId);
+
+    event DepositedCloseFees(address user, uint256 amount, uint256 positionId);
+
     event FeeOvercollected(int256 amount);
 
     event PayedOutCollateral(address maker, uint256 amount, uint256 positionId);
 
     event LiquidityGapWarning(uint256 amount);
 
-    event RealizedPnL(address indexed maker, uint256 indexed positionId, int256 realizedPnL);
+    event RealizedPnL(
+        address indexed maker,
+        uint256 indexed positionId,
+        int256 realizedPnL,
+        int256 realizedBorrowFeeAmount,
+        int256 realizedFundingFeeAmount
+    );
+
+    event UpdatedFeeIntegrals(int256 borrowFeeIntegral, int256 longFundingFeeIntegral, int256 shortFundingFeeIntegral);
+
+    event SetTotalVolumeLimit(uint256 totalVolumeLimit);
+
+    event DepositedBorrowFees(uint256 amount);
+
+    event RegisteredProtocolPnL(int256 protocolPnL, uint256 payout);
+
+    event SetBorrowFeeRate(int256 borrowFeeRate);
+
+    event SetMaxFundingFeeRate(int256 maxFundingFeeRate);
+
+    event SetMaxExcessRatio(int256 maxExcessRatio);
+
+    event SetLiquidatorReward(uint256 liquidatorReward);
+
+    event SetMinLeverage(uint128 minLeverage);
+
+    event SetMaxLeverage(uint128 maxLeverage);
+
+    event SetMinMargin(uint256 minMargin);
+
+    event SetVolumeLimit(uint256 volumeLimit);
+
+    event SetFeeBufferFactor(int256 feeBufferFactor);
+
+    event SetTotalAssetAmountLimit(uint256 totalAssetAmountLimit);
+
+    event SetPriceFeedAdapter(address priceFeedAdapter);
 
     /* ========== VIEW FUNCTIONS ========== */
 
     function name() external view returns (string memory);
 
     function collateral() external view returns (IERC20);
-
-    function positionIdsOf(address maker) external view returns (uint256[] memory);
 
     function detailsOfPosition(uint256 positionId) external view returns (PositionDetails memory);
 
@@ -108,11 +145,15 @@ interface ITradePair {
 
     function positionIsLiquidatable(uint256 positionId) external view returns (bool);
 
+    function positionIsLiquidatableAtPrice(uint256 positionId, int256 price) external view returns (bool);
+
     function getCurrentFundingFeeRates() external view returns (int256, int256);
 
     function getCurrentPrices() external view returns (int256, int256);
 
     function positionIsShort(uint256) external view returns (bool);
+
+    function collateralToPriceMultiplier() external view returns (uint256);
 
     /* ========== GENERATED VIEW FUNCTIONS ========== */
 
@@ -128,7 +169,7 @@ interface ITradePair {
 
     function volumeLimit() external view returns (uint256);
 
-    function totalSizeLimit() external view returns (uint256);
+    function totalVolumeLimit() external view returns (uint256);
 
     function positionStats() external view returns (uint256, uint256, uint256, uint256, uint256, uint256);
 
@@ -167,7 +208,6 @@ interface ITradePair {
     function initialize(
         string memory name,
         IERC20Metadata collateral,
-        uint256 assetDecimals,
         IPriceFeedAdapter priceFeedAdapter,
         ILiquidityPoolAdapter liquidityPoolAdapter
     ) external;
@@ -190,5 +230,7 @@ interface ITradePair {
 
     function setFeeBufferFactor(int256 feeBufferAmount) external;
 
-    function setTotalSizeLimit(uint256 totalSizeLimit) external;
+    function setTotalVolumeLimit(uint256 totalVolumeLimit) external;
+
+    function setPriceFeedAdapter(IPriceFeedAdapter priceFeedAdapter) external;
 }

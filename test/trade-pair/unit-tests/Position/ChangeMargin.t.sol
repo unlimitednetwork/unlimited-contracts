@@ -20,13 +20,9 @@ contract TradePairChangeMarginTest is Test, WithTradePair {
     function testRemoveMarginAndReceivePayout() public {
         assertEq(collateral.balanceOf(ALICE), 0);
         tradePair.removeMarginFromPosition(address(ALICE), positionId, MARGIN_0 / 2);
-        assertEq(collateral.balanceOf(ALICE), MARGIN_0 / 2 - MARGIN_0 / 2 * BASE_USER_FEE / BPS_MULTIPLIER, "ALICE");
+        assertEq(collateral.balanceOf(ALICE), MARGIN_0 / 2, "ALICE");
         assertEq(collateral.balanceOf(address(tradePair)), MARGIN_0 / 2, "tradePair");
-        assertEq(
-            collateral.balanceOf(address(mockFeeManager)),
-            OPEN_POSITION_FEE_0 + MARGIN_0 / 2 * BASE_USER_FEE / BPS_MULTIPLIER,
-            "mockFeeManager"
-        );
+        assertEq(collateral.balanceOf(address(mockFeeManager)), OPEN_POSITION_FEE_0, "mockFeeManager");
     }
 
     function testAddMargin() public {

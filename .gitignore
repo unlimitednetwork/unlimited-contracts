@@ -3,3 +3,6 @@ out/
 .env
 broadcast
 lcov.info
+/deploy/contracts.local.json
+/deploy/contracts.test.json
+/deploy/contracts.*.json

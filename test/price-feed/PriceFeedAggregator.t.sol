@@ -3,6 +3,7 @@
 pragma solidity 0.8.17;
 
 import "forge-std/Test.sol";
+import "lib/openzeppelin-contracts/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import "src/price-feed/ChainlinkUsdPriceFeed.sol";
 import "src/price-feed/PriceFeedAggregator.sol";
 import "src/sys-controller/UnlimitedOwner.sol";
@@ -25,7 +26,9 @@ contract PriceFeedAggregatorTest is Test {
 
         IPriceFeed[] memory priceFeeds;
 
-        unlimitedOwner = new UnlimitedOwner();
+        unlimitedOwner =
+            UnlimitedOwner(address(new TransparentUpgradeableProxy(address(new UnlimitedOwner()), address(1), "")));
+
         unlimitedOwner.initialize();
 
         priceFeedAggregator = new PriceFeedAggregator(unlimitedOwner, "Test", 18, priceFeeds);

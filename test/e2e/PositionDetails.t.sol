@@ -46,92 +46,45 @@ contract PositionDetailsTest is WithFullFixtures {
 
         // OPEN POSITION
         deal(address(collateral), BOB, INITIAL_BALANCE * 2);
-        uint256 positionId0 = _openPosition(BOB, tradePair0, INITIAL_BALANCE, LEVERAGE_0, false);
-        uint256 positionId1 = _openPosition(BOB, tradePair0, INITIAL_BALANCE, LEVERAGE_0, true);
+        uint256 positionId0 =
+            _openPosition(BOB_PK, tradeManager, tradePair0, ASSET_PRICE_0, INITIAL_BALANCE, LEVERAGE_0, false);
+        uint256 positionId1 =
+            _openPosition(BOB_PK, tradeManager, tradePair0, ASSET_PRICE_0, INITIAL_BALANCE, LEVERAGE_0, true);
 
         // ASSERT RETURN VALUES
         assertEq(positionId0, 0, "positionId0");
         assertEq(positionId1, 1, "positionId1");
     }
 
+    function test_ZeroBorrowFee() public {
+        // ADD LIQUIDITY
+        uint256 liquidityAmount = 100_000 * COLLATERAL_MULTIPLIER;
+        deal(address(collateral), ALICE, liquidityAmount);
+
+        _depositLiquidity(liquidityPool0, ALICE, liquidityAmount);
+
+        tradePair0.setBorrowFeeRate(0);
+
+        // OPEN POSITION
+        deal(address(collateral), BOB, INITIAL_BALANCE * 2);
+        uint256 positionId0 =
+            _openPosition(BOB_PK, tradeManager, tradePair0, ASSET_PRICE_0, INITIAL_BALANCE, LEVERAGE_0, false);
+        uint256 positionId1 =
+            _openPosition(BOB_PK, tradeManager, tradePair0, ASSET_PRICE_0, INITIAL_BALANCE, LEVERAGE_0, true);
+
+        vm.warp(100 days);
+
+        // As borrow fee rate is 0 and funding LONG and SHORT are in balance, then totalFeeAmount should be 0
+
+        PositionDetails memory position1 = tradePair0.detailsOfPosition(positionId0);
+        PositionDetails memory position2 = tradePair0.detailsOfPosition(positionId1);
+
+        // ASSERT RETURN VALUES
+        assertEq(position1.currentBorrowFeeAmount, 0, "positionId0");
+        assertEq(position2.currentBorrowFeeAmount, 0, "positionId1");
+    }
+
     /* ========== HELPER FUNCTIONS =========== */
-
-    function _closePosition(address user, ITradePair tradePair, uint256 positionId, int256 constraintPrice)
-        private
-        prank(user)
-    {
-        ClosePositionParams memory closePositionParams = ClosePositionParams(address(tradePair), positionId);
-        Constraints memory constraints =
-            Constraints(block.timestamp + 1 hours, constraintPrice * 99 / 100, constraintPrice * 101 / 100);
-        UpdateData[] memory updateData;
-
-        tradeManager.closePosition(closePositionParams, constraints, updateData);
-    }
-
-    function _addMarginToPosition(
-        address user,
-        ITradePair tradePair,
-        uint256 addedMargin,
-        uint256 positionId,
-        int256 constraintPrice
-    ) private prank(user) {
-        AddMarginToPositionParams memory addMarginPositionParams =
-            AddMarginToPositionParams(address(tradePair), positionId, addedMargin);
-        Constraints memory constraints =
-            Constraints(block.timestamp + 1 hours, constraintPrice * 99 / 100, constraintPrice * 101 / 100);
-        UpdateData[] memory updateData;
-
-        collateral.approve(address(tradeManager), addedMargin);
-
-        tradeManager.addMarginToPosition(addMarginPositionParams, constraints, updateData);
-    }
-
-    function _removeMarginFromPosition(
-        address user,
-        ITradePair tradePair,
-        uint256 removedMargin,
-        uint256 positionId,
-        int256 constraintPrice
-    ) private prank(user) {
-        RemoveMarginFromPositionParams memory addMarginPositionParams =
-            RemoveMarginFromPositionParams(address(tradePair), positionId, removedMargin);
-        Constraints memory constraints =
-            Constraints(block.timestamp + 1 hours, constraintPrice * 99 / 100, constraintPrice * 101 / 100);
-        UpdateData[] memory updateData;
-
-        tradeManager.removeMarginFromPosition(addMarginPositionParams, constraints, updateData);
-    }
-
-    function _partiallyClosePosition(
-        address user,
-        ITradePair tradePair,
-        uint256 positionId,
-        int256 constraintPrice,
-        uint256 proportion
-    ) private prank(user) {
-        PartiallyClosePositionParams memory partiallyClosePositionParams =
-            PartiallyClosePositionParams(address(tradePair), positionId, proportion);
-        Constraints memory constraints =
-            Constraints(block.timestamp + 1 hours, constraintPrice * 99 / 100, constraintPrice * 101 / 100);
-        UpdateData[] memory updateData;
-
-        tradeManager.partiallyClosePosition(partiallyClosePositionParams, constraints, updateData);
-    }
-
-    function _openPosition(address user, ITradePair tradePair, uint256 margin, uint256 leverage, bool isShort)
-        private
-        prank(user)
-        returns (uint256)
-    {
-        OpenPositionParams memory openPositionParams =
-            OpenPositionParams(address(tradePair), margin, leverage, isShort, address(0), address(0));
-        Constraints memory constraints =
-            Constraints(block.timestamp + 1 hours, ASSET_PRICE_0 * 99 / 100, ASSET_PRICE_0 * 101 / 100);
-        UpdateData[] memory updateData;
-
-        collateral.approve(address(tradeManager), margin);
-        return tradeManager.openPosition(openPositionParams, constraints, updateData);
-    }
 
     function _depositLiquidity(ILiquidityPool liquidityPool, address user, uint256 amount)
         private
@@ -140,11 +93,5 @@ contract PositionDetailsTest is WithFullFixtures {
     {
         collateral.approve(address(liquidityPool), amount);
         shares = liquidityPool.deposit(amount, 0);
-    }
-
-    modifier prank(address executor) {
-        vm.startPrank(executor);
-        _;
-        vm.stopPrank();
     }
 }

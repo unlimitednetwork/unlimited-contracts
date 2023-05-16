@@ -10,6 +10,7 @@ contract TradePairViewFunctionsTest is Test, WithTradePair {
 
     function setUp() public {
         deployTradePair();
+
         vm.startPrank(address(mockTradeManager));
         vm.warp(0);
         positionId =
@@ -27,10 +28,7 @@ contract TradePairViewFunctionsTest is Test, WithTradePair {
         assertEq(positionDetails.leverage, LEVERAGE_0, "leverage");
         assertEq(positionDetails.isShort, IS_SHORT_0, "isShort");
         assertEq(positionDetails.entryPrice, ASSET_PRICE_0, "entryPrice");
-        assertEq(positionDetails.markPrice, ASSET_PRICE_0, "price_mark");
-        assertEq(positionDetails.bankruptcyPrice, PRICE_BANKRUPTCY_0, "price_bankruptcy");
-        assertEq(positionDetails.equity, int256(MARGIN_0), "equity");
-        assertEq(positionDetails.PnL, int256(0), "PnL");
+        assertEq(positionDetails.liquidationPrice, LIQUIDATION_PRICE_0, "liquidationPrice");
     }
 
     function testChangesWhenPriceChanges2() public {
@@ -47,10 +45,7 @@ contract TradePairViewFunctionsTest is Test, WithTradePair {
         assertEq(positionDetails.leverage, LEVERAGE_0, "leverage");
         assertEq(positionDetails.isShort, IS_SHORT_0, "isShort");
         assertEq(positionDetails.entryPrice, ASSET_PRICE_0, "entryPrice");
-        assertEq(positionDetails.markPrice, ASSET_PRICE_0_2, "price_mark");
-        assertEq(positionDetails.bankruptcyPrice, PRICE_BANKRUPTCY_0, "price_bankruptcy");
-        assertEq(positionDetails.equity, EQUITY_0_2, "equity");
-        assertEq(positionDetails.PnL, PNL_0_2, "PnL");
+        assertEq(positionDetails.liquidationPrice, LIQUIDATION_PRICE_0, "liquidationPrice");
     }
 
     function testChangesWhenPriceChanges1() public {
@@ -67,10 +62,7 @@ contract TradePairViewFunctionsTest is Test, WithTradePair {
         assertEq(positionDetails.leverage, LEVERAGE_0, "leverage");
         assertEq(positionDetails.isShort, IS_SHORT_0, "isShort");
         assertEq(positionDetails.entryPrice, ASSET_PRICE_0, "entryPrice");
-        assertEq(positionDetails.markPrice, ASSET_PRICE_1, "price_mark");
-        assertEq(positionDetails.bankruptcyPrice, PRICE_BANKRUPTCY_0, "price_bankruptcy");
-        assertEq(positionDetails.equity, EQUITY_0_1, "equity");
-        assertEq(positionDetails.PnL, PNL_0_1, "PnL");
+        assertEq(positionDetails.liquidationPrice, LIQUIDATION_PRICE_0, "liquidationPrice");
     }
 
     function testChangesWhenPriceChangedAndTimeElapsed() public {
@@ -88,11 +80,11 @@ contract TradePairViewFunctionsTest is Test, WithTradePair {
         assertEq(positionDetails.leverage, NET_LEVERAGE_0_2_2, "leverage");
         assertEq(positionDetails.isShort, IS_SHORT_0, "isShort");
         assertEq(positionDetails.entryPrice, ASSET_PRICE_0, "entryPrice");
-        assertEq(positionDetails.markPrice, ASSET_PRICE_0_2, "price_mark");
-        assertEq(positionDetails.bankruptcyPrice, PRICE_BANKRUPTCY_0, "price_bankruptcy");
-        assertEq(positionDetails.equity, EQUITY_0_2_2, "equity");
-        assertEq(positionDetails.PnL, PNL_0_2_2, "PnL");
-        assertEq(positionDetails.totalFeeAmount, int256(TOTAL_FEE_AMOUNT_0_2_2), "totalFeeAmount");
+        assertEq(
+            positionDetails.currentBorrowFeeAmount + positionDetails.currentFundingFeeAmount,
+            int256(TOTAL_FEE_AMOUNT_0_2_2),
+            "totalFeeAmount"
+        );
     }
 
     function testChangedPriceAndOverFee() public {
@@ -110,11 +102,12 @@ contract TradePairViewFunctionsTest is Test, WithTradePair {
         assertEq(positionDetails.leverage, type(uint256).max, "leverage");
         assertEq(positionDetails.isShort, IS_SHORT_0, "isShort");
         assertEq(positionDetails.entryPrice, ASSET_PRICE_0, "entryPrice");
-        assertEq(positionDetails.markPrice, ASSET_PRICE_0_2, "price_mark");
-        assertEq(positionDetails.bankruptcyPrice, PRICE_BANKRUPTCY_0, "price_bankruptcy");
-        assertEq(positionDetails.equity, EQUITY_0_2_3, "equity");
-        assertEq(positionDetails.PnL, PNL_0_2_3, "PnL");
-        assertEq(positionDetails.totalFeeAmount, int256(TOTAL_FEE_AMOUNT_0_2_3), "totalFeeAmount");
+        assertEq(positionDetails.liquidationPrice, ASSET_PRICE_0, "liquidationPrice");
+        assertEq(
+            positionDetails.currentBorrowFeeAmount + positionDetails.currentFundingFeeAmount,
+            int256(TOTAL_FEE_AMOUNT_0_2_3),
+            "totalFeeAmount"
+        );
     }
 
     function testChangedPriceAndNonCoveredFee() public {
@@ -132,11 +125,14 @@ contract TradePairViewFunctionsTest is Test, WithTradePair {
         assertEq(positionDetails.leverage, type(uint256).max, "leverage");
         assertEq(positionDetails.isShort, IS_SHORT_0, "isShort");
         assertEq(positionDetails.entryPrice, ASSET_PRICE_0, "entryPrice");
-        assertEq(positionDetails.markPrice, ASSET_PRICE_0_2, "price_mark");
-        assertEq(positionDetails.bankruptcyPrice, PRICE_BANKRUPTCY_0, "price_bankruptcy");
-        assertEq(positionDetails.equity, EQUITY_0_2_4, "equity");
-        assertEq(positionDetails.PnL, PNL_0_2_4, "PnL");
-        assertEq(positionDetails.totalFeeAmount, int256(TOTAL_FEE_AMOUNT_0_2_4), "totalFeeAmount");
+        assertEq(positionDetails.liquidationPrice, ASSET_PRICE_0, "liquidationPrice");
+        assertEq(
+            positionDetails.currentBorrowFeeAmount + positionDetails.currentFundingFeeAmount,
+            int256(TOTAL_FEE_AMOUNT_0_2_4),
+            "totalFeeAmount"
+        );
+        assertEq(positionDetails.currentBorrowFeeAmount, int256(TOTAL_FEE_AMOUNT_0_2_4 / 4), "borrowFeeAmount");
+        assertEq(positionDetails.currentFundingFeeAmount, int256(TOTAL_FEE_AMOUNT_0_2_4 * 3 / 4), "fundingFeeAmount");
     }
 
     function testProfitAndNonCoveredFee() public {
@@ -154,10 +150,11 @@ contract TradePairViewFunctionsTest is Test, WithTradePair {
         assertEq(positionDetails.leverage, type(uint256).max, "leverage");
         assertEq(positionDetails.isShort, IS_SHORT_0, "isShort");
         assertEq(positionDetails.entryPrice, ASSET_PRICE_0, "entryPrice");
-        assertEq(positionDetails.markPrice, ASSET_PRICE_1, "price_mark");
-        assertEq(positionDetails.bankruptcyPrice, PRICE_BANKRUPTCY_0, "price_bankruptcy");
-        assertEq(positionDetails.equity, EQUITY_0_1_4, "equity");
-        assertEq(positionDetails.PnL, PNL_0_1_4, "PnL");
-        assertEq(positionDetails.totalFeeAmount, int256(TOTAL_FEE_AMOUNT_0_2_4), "totalFeeAmount");
+        assertEq(positionDetails.liquidationPrice, ASSET_PRICE_0, "liquidationPrice");
+        assertEq(
+            positionDetails.currentBorrowFeeAmount + positionDetails.currentFundingFeeAmount,
+            int256(TOTAL_FEE_AMOUNT_0_2_4),
+            "totalFeeAmount"
+        );
     }
 }

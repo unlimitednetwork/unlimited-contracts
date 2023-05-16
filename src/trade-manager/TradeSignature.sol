@@ -5,13 +5,14 @@ pragma solidity 0.8.17;
 import "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 import "../interfaces/ITradeManager.sol";
+import "../interfaces/ITradeSignature.sol";
 
 /**
  * @title TradeSignature
  * @notice This contract is used to verify signatures for trade orders
  * @dev This contract is based on the EIP712 standard
  */
-contract TradeSignature is EIP712 {
+contract TradeSignature is EIP712, ITradeSignature {
     bytes32 public constant OPEN_POSITION_ORDER_TYPEHASH = keccak256(
         "OpenPositionOrder(OpenPositionParams params,Constraints constraints,uint256 salt)Constraints(uint256 deadline,int256 minPrice,int256 maxPrice)OpenPositionParams(address tradePair,uint256 margin,uint256 leverage,bool isShort,address referrer,address whitelabelAddress)"
     );
@@ -21,22 +22,21 @@ contract TradeSignature is EIP712 {
     );
 
     bytes32 public constant CLOSE_POSITION_ORDER_TYPEHASH = keccak256(
-        "ClosePositionOrder(ClosePosition closePosition,Constraints constraints,uint256 salt)Constraints(uint256 deadline,int256 minPrice,int256 maxPrice)ClosePositionParams(address tradePair,uint256 positionId)"
+        "ClosePositionOrder(ClosePositionParams params,Constraints constraints,bytes32 signatureHash,uint256 salt)ClosePositionParams(address tradePair,uint256 positionId)Constraints(uint256 deadline,int256 minPrice,int256 maxPrice)"
     );
 
     bytes32 public constant CLOSE_POSITION_PARAMS_TYPEHASH =
         keccak256("ClosePositionParams(address tradePair,uint256 positionId)");
 
     bytes32 public constant PARTIALLY_CLOSE_POSITION_ORDER_TYPEHASH = keccak256(
-        "PartiallyClosePositionOrder(PartiallyClosePositionParams params,Constraints constraints,uint256 salt)Constraints(uint256 deadline,int256 minPrice,int256 maxPrice)PartiallyClosePositionParams(address tradePair,uint256 positionId,uint256 proportion,uint256 leaveLeverageFactor)"
+        "PartiallyClosePositionOrder(PartiallyClosePositionParams params,Constraints constraints,bytes32 signatureHash,uint256 salt)Constraints(uint256 deadline,int256 minPrice,int256 maxPrice)PartiallyClosePositionParams(address tradePair,uint256 positionId,uint256 proportion)"
     );
 
-    bytes32 public constant PARTIALLY_CLOSE_POSITION_PARAMS_TYPEHASH = keccak256(
-        "PartiallyClosePositionParams(address tradePair,uint256 positionId,uint256 proportion,uint256 leaveLeverageFactor)"
-    );
+    bytes32 public constant PARTIALLY_CLOSE_POSITION_PARAMS_TYPEHASH =
+        keccak256("PartiallyClosePositionParams(address tradePair,uint256 positionId,uint256 proportion)");
 
     bytes32 public constant EXTEND_POSITION_ORDER_TYPEHASH = keccak256(
-        "ExtendPositionOrder(ExtendPositionParams params,Constraints constraints,uint256 salt)Constraints(uint256 deadline,int256 minPrice,int256 maxPrice)ExtendPositionParams(address tradePair,uint256 positionId,uint256 addedMargin,uint256 addedLeverage)"
+        "ExtendPositionOrder(ExtendPositionParams params,Constraints constraints,bytes32 signatureHash,uint256 salt)Constraints(uint256 deadline,int256 minPrice,int256 maxPrice)ExtendPositionParams(address tradePair,uint256 positionId,uint256 addedMargin,uint256 addedLeverage)"
     );
 
     bytes32 public constant EXTEND_POSITION_PARAMS_TYPEHASH = keccak256(
@@ -44,21 +44,21 @@ contract TradeSignature is EIP712 {
     );
 
     bytes32 public constant EXTEND_POSITION_TO_LEVERAGE_ORDER_TYPEHASH = keccak256(
-        "ExtendPositionToLeverageOrder(ExtendPositionToLeverageParams params,Constraints constraints,uint256 salt)Constraints(uint256 deadline,int256 minPrice,int256 maxPrice)ExtendPositionToLeverageParams(address tradePair,uint256 positionId,uint256 targetLeverage)"
+        "ExtendPositionToLeverageOrder(ExtendPositionToLeverageParams params,Constraints constraints,bytes32 signatureHash,uint256 salt)Constraints(uint256 deadline,int256 minPrice,int256 maxPrice)ExtendPositionToLeverageParams(address tradePair,uint256 positionId,uint256 targetLeverage)"
     );
 
     bytes32 public constant EXTEND_POSITION_TO_LEVERAGE_PARAMS_TYPEHASH =
         keccak256("ExtendPositionToLeverageParams(address tradePair,uint256 positionId,uint256 targetLeverage)");
 
     bytes32 public constant REMOVE_MARGIN_FROM_POSITION_ORDER_TYPEHASH = keccak256(
-        "RemoveMarginFromPositionOrder(RemoveMarginFromPositionParams params,Constraints constraints,uint256 salt)Constraints(uint256 deadline,int256 minPrice,int256 maxPrice)RemoveMarginFromPositionParams(address tradePair,uint256 positionId,uint256 removedMargin)"
+        "RemoveMarginFromPositionOrder(RemoveMarginFromPositionParams params,Constraints constraints,bytes32 signatureHash,uint256 salt)Constraints(uint256 deadline,int256 minPrice,int256 maxPrice)RemoveMarginFromPositionParams(address tradePair,uint256 positionId,uint256 removedMargin)"
     );
 
     bytes32 public constant REMOVE_MARGIN_FROM_POSITION_PARAMS_TYPEHASH =
         keccak256("RemoveMarginFromPositionParams(address tradePair,uint256 positionId,uint256 removedMargin)");
 
     bytes32 public constant ADD_MARGIN_TO_POSITION_ORDER_TYPEHASH = keccak256(
-        "AddMarginToPositionOrder(AddMarginToPositionParams params,Constraints constraints,uint256 salt)Constraints(uint256 deadline,int256 minPrice,int256 maxPrice)AddMarginToPositionParams(address tradePair,uint256 positionId,uint256 addedMargin)"
+        "AddMarginToPositionOrder(AddMarginToPositionParams params,Constraints constraints,bytes32 signatureHash,uint256 salt)AddMarginToPositionParams(address tradePair,uint256 positionId,uint256 addedMargin)Constraints(uint256 deadline,int256 minPrice,int256 maxPrice)"
     );
 
     bytes32 public constant ADD_MARGIN_TO_POSITION_PARAMS_TYPEHASH =
@@ -202,6 +202,7 @@ contract TradeSignature is EIP712 {
                     CLOSE_POSITION_ORDER_TYPEHASH,
                     hash(closePositionOrder.params),
                     hash(closePositionOrder.constraints),
+                    closePositionOrder.signatureHash,
                     closePositionOrder.salt
                 )
             )
@@ -222,9 +223,10 @@ contract TradeSignature is EIP712 {
         return _hashTypedDataV4(
             keccak256(
                 abi.encode(
-                    CLOSE_POSITION_ORDER_TYPEHASH,
+                    PARTIALLY_CLOSE_POSITION_ORDER_TYPEHASH,
                     hashPartiallyClosePositionParams(partiallyClosePositionOrder.params),
                     hash(partiallyClosePositionOrder.constraints),
+                    partiallyClosePositionOrder.signatureHash,
                     partiallyClosePositionOrder.salt
                 )
             )
@@ -253,6 +255,7 @@ contract TradeSignature is EIP712 {
                     EXTEND_POSITION_ORDER_TYPEHASH,
                     hashExtendPositionParams(extendPositionOrder.params),
                     hash(extendPositionOrder.constraints),
+                    extendPositionOrder.signatureHash,
                     extendPositionOrder.salt
                 )
             )
@@ -286,6 +289,7 @@ contract TradeSignature is EIP712 {
                     EXTEND_POSITION_TO_LEVERAGE_ORDER_TYPEHASH,
                     hashExtendPositionToLeverageParams(extendPositionToLeverageOrder.params),
                     hash(extendPositionToLeverageOrder.constraints),
+                    extendPositionToLeverageOrder.signatureHash,
                     extendPositionToLeverageOrder.salt
                 )
             )
@@ -318,6 +322,7 @@ contract TradeSignature is EIP712 {
                     ADD_MARGIN_TO_POSITION_ORDER_TYPEHASH,
                     hashAddMarginToPositionParams(addMarginToPositionOrder.params),
                     hash(addMarginToPositionOrder.constraints),
+                    addMarginToPositionOrder.signatureHash,
                     addMarginToPositionOrder.salt
                 )
             )
@@ -350,6 +355,7 @@ contract TradeSignature is EIP712 {
                     REMOVE_MARGIN_FROM_POSITION_ORDER_TYPEHASH,
                     hashRemoveMarginFromPositionParams(removeMarginFromPositionOrder.params),
                     hash(removeMarginFromPositionOrder.constraints),
+                    removeMarginFromPositionOrder.signatureHash,
                     removeMarginFromPositionOrder.salt
                 )
             )

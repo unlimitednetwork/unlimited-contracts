@@ -25,7 +25,8 @@ contract PriceFeedAdapterTest is Test {
             1e8
         );
 
-        priceFeedAdapter = new PriceFeedAdapter("Test", assetPriceFeedAggregator, collateralPriceFeedAggregator, 18, 6);
+        priceFeedAdapter =
+            new PriceFeedAdapter("Test", assetPriceFeedAggregator, collateralPriceFeedAggregator, 18, 6, 8);
     }
 
     function testCollateralToAsset() public {

@@ -173,7 +173,7 @@ contract UnlimitedPriceFeedTest is Test, WithMocks {
 
     /* ========== HELPERS ========== */
 
-    function _getUpdateData(PriceData memory priceData) internal returns (bytes memory) {
+    function _getUpdateData(PriceData memory priceData) internal view returns (bytes memory) {
         uint256 signerPk = 999;
         address signer = vm.addr(signerPk);
 
@@ -183,7 +183,7 @@ contract UnlimitedPriceFeedTest is Test, WithMocks {
         return _encodeUpdateData(signature, signer, priceData);
     }
 
-    function _getUpdateDataDifferentAddress(PriceData memory priceData) internal returns (bytes memory) {
+    function _getUpdateDataDifferentAddress(PriceData memory priceData) internal pure returns (bytes memory) {
         uint256 signerPk = 999;
         address signer = vm.addr(signerPk);
 
@@ -221,7 +221,7 @@ contract UnlimitedPriceFeedTest is Test, WithMocks {
         return abi.encodePacked(signature, abi.encode(signer), _encodePriceData(_priceData));
     }
 
-    function _sign(uint256 signerPk, bytes32 dataHash) private returns (bytes memory) {
+    function _sign(uint256 signerPk, bytes32 dataHash) private pure returns (bytes memory) {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPk, dataHash);
         return abi.encodePacked(r, s, v);
     }

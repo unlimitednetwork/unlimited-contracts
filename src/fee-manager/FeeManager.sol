@@ -57,6 +57,9 @@ contract FeeManager is IFeeManager, UnlimitedOwnable, Initializable {
     /// @notice Stores custom referral fee for users
     mapping(address => uint256) public customReferralFee;
 
+    // Storage gap
+    uint256[50] __gap;
+
     /**
      * @notice Constructs the FeeManager contract.
      * @param unlimitedOwner_ The global owner of Unlimited Protocol.
@@ -327,7 +330,7 @@ contract FeeManager is IFeeManager, UnlimitedOwnable, Initializable {
                 amount_ -= referralFeeAmount;
             }
 
-            emit ReferrerFeesPaid(referrer, address(asset_), referralFeeAmount);
+            emit ReferrerFeesPaid(referrer, address(asset_), referralFeeAmount, user_);
         }
 
         uint256 amountLeft = amount_;
@@ -345,7 +348,7 @@ contract FeeManager is IFeeManager, UnlimitedOwnable, Initializable {
                     amountLeft -= whitelabelFeeAmount;
                     stakersFeeAmount -= whitelabelFeeAmount;
 
-                    emit WhiteLabelFeesPaid(whitelabelAddress_, address(asset_), whitelabelFeeAmount);
+                    emit WhiteLabelFeesPaid(whitelabelAddress_, address(asset_), whitelabelFeeAmount, user_);
                 }
             }
 
@@ -371,7 +374,8 @@ contract FeeManager is IFeeManager, UnlimitedOwnable, Initializable {
                 stakersFeeAmount,
                 devFeeAmount,
                 insuranceFundFeeAmount,
-                amountLeft // liquidityPoolFeeAmount
+                amountLeft, // liquidityPoolFeeAmount
+                user_
             );
         }
     }

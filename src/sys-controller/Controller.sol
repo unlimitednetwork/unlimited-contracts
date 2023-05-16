@@ -27,6 +27,15 @@ contract Controller is IController, UnlimitedOwnable {
     /// @notice Is signer registered
     mapping(address => bool) public isSigner;
 
+    /// @notice Is order executor registered
+    mapping(address => bool) public isOrderExecutor;
+
+    /// @notice Returns order reward for collateral token
+    /// @dev Order reward is payed to executor of the order book (mainly Unlimited order book backend)
+    /// It is payed by a maker and added on top of the margin
+    /// Unlimited is collateral token agnostic, so the order reward can be different for different collaterals
+    mapping(address => uint256) public orderRewardOfCollateral;
+
     /**
      * @notice Initializes immutable variables.
      * @param unlimitedOwner_ UnlimitedOwner contract.
@@ -202,6 +211,21 @@ contract Controller is IController, UnlimitedOwnable {
     }
 
     /**
+     * @notice Sets order reward for collateral
+     * @param collateral_ address of the collateral token
+     * @param orderReward_ order reward (in decimals of collateral token)
+     */
+    function setOrderRewardOfCollateral(address collateral_, uint256 orderReward_)
+        external
+        onlyOwner
+        onlyNonZeroAddress(collateral_)
+    {
+        orderRewardOfCollateral[collateral_] = orderReward_;
+
+        emit SetOrderRewardOfCollateral(collateral_, orderReward_);
+    }
+
+    /**
      * @notice Reverts if trade pair inactive
      * @param tradePair_ trade pair address
      */
@@ -225,6 +249,24 @@ contract Controller is IController, UnlimitedOwnable {
     function removeSigner(address signer_) external onlyOwner {
         isSigner[signer_] = false;
         emit SignerRemoved(signer_);
+    }
+
+    /**
+     * @notice Function to add a valid order executor
+     * @param orderExecutor_ address of the order executor
+     */
+    function addOrderExecutor(address orderExecutor_) external onlyOwner {
+        isOrderExecutor[orderExecutor_] = true;
+        emit OrderExecutorAdded(orderExecutor_);
+    }
+
+    /**
+     * @notice Function to remove a valid order executor
+     * @param orderExecutor_ address of the order executor
+     */
+    function removeOrderExecutor(address orderExecutor_) external onlyOwner {
+        isOrderExecutor[orderExecutor_] = false;
+        emit OrderExecutorRemoved(orderExecutor_);
     }
 
     /* ========== PRIVATE FUNCTIONS ========== */

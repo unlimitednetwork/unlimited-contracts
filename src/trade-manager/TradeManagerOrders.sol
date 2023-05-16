@@ -4,22 +4,15 @@ pragma solidity 0.8.17;
 
 import "./TradeManager.sol";
 import "./TradeSignature.sol";
+import "../interfaces/ITradeManagerOrders.sol";
 
 /**
  * @title TradeManagerOrders
  * @notice Exposes Functions to open, alter and close positions via signed orders.
  * @dev This contract is called by the Unlimited backend. This allows for an order book.
  */
-contract TradeManagerOrders is TradeManager, TradeSignature {
-    event OpenedPositionViaSignature(address indexed tradePair, uint256 indexed id, bytes indexed signature);
-    event ClosedPositionViaSignature(address indexed tradePair, uint256 indexed id, bytes indexed signature);
-    event PartiallyClosedPositionViaSignature(address indexed tradePair, uint256 indexed id, bytes indexed signature);
-    event ExtendedPositionViaSignature(address indexed tradePair, uint256 indexed id, bytes indexed signature);
-    event ExtendedPositionToLeverageViaSignature(
-        address indexed tradePair, uint256 indexed id, bytes indexed signature
-    );
-    event AddedMarginToPositionViaSignature(address indexed tradePair, uint256 indexed id, bytes indexed signature);
-    event RemovedMarginFromPositionViaSignature(address indexed tradePair, uint256 indexed id, bytes indexed signature);
+contract TradeManagerOrders is ITradeManagerOrders, TradeSignature, TradeManager {
+    using SafeERC20 for IERC20;
 
     mapping(bytes32 => TradeId) public sigHashToTradeId;
 
@@ -28,7 +21,10 @@ contract TradeManagerOrders is TradeManager, TradeSignature {
      * @param controller_ The address of the controller.
      * @param userManager_ The address of the user manager.
      */
-    constructor(IController controller_, IUserManager userManager_) TradeManager(controller_, userManager_) {}
+    constructor(IController controller_, IUserManager userManager_)
+        TradeManager(controller_, userManager_)
+        TradeSignature()
+    {}
 
     /**
      * @notice Opens a position with a signature
@@ -41,12 +37,15 @@ contract TradeManagerOrders is TradeManager, TradeSignature {
         UpdateData[] calldata updateData_,
         address maker_,
         bytes calldata signature_
-    ) external onlyActiveTradePair(order_.params.tradePair) returns (uint256) {
+    ) external onlyOrderExecutor onlyActiveTradePair(order_.params.tradePair) returns (uint256) {
         _updateContracts(updateData_);
         _processSignature(order_, maker_, signature_);
         _verifyConstraints(
-            order_.params.tradePair, order_.constraints, order_.params.isShort ? UsePrice.MAX : UsePrice.MIN
+            order_.params.tradePair, order_.constraints, order_.params.isShort ? UsePrice.MIN : UsePrice.MAX
         );
+
+        _transferOrderReward(order_.params.tradePair, maker_, msg.sender);
+
         uint256 positionId = _openPosition(order_.params, maker_);
 
         sigHashToTradeId[keccak256(signature_)] = TradeId(order_.params.tradePair, uint96(positionId));
@@ -67,7 +66,7 @@ contract TradeManagerOrders is TradeManager, TradeSignature {
         UpdateData[] calldata updateData_,
         address maker_,
         bytes calldata signature_
-    ) external onlyActiveTradePair(order_.params.tradePair) {
+    ) external onlyOrderExecutor onlyActiveTradePair(order_.params.tradePair) {
         _updateContracts(updateData_);
         _processSignature(order_, maker_, signature_);
 
@@ -76,6 +75,8 @@ contract TradeManagerOrders is TradeManager, TradeSignature {
             order_.constraints,
             ITradePair(order_.params.tradePair).positionIsShort(order_.params.positionId) ? UsePrice.MAX : UsePrice.MIN
         );
+
+        _transferOrderReward(order_.params.tradePair, maker_, msg.sender);
 
         // make for all orders
         _closePosition(_injectPositionIdToCloseOrder(order_).params, maker_);
@@ -94,7 +95,7 @@ contract TradeManagerOrders is TradeManager, TradeSignature {
         UpdateData[] calldata updateData_,
         address maker_,
         bytes calldata signature_
-    ) external onlyActiveTradePair(order_.params.tradePair) {
+    ) external onlyOrderExecutor onlyActiveTradePair(order_.params.tradePair) {
         _updateContracts(updateData_);
         _processSignature(order_, maker_, signature_);
 
@@ -104,6 +105,9 @@ contract TradeManagerOrders is TradeManager, TradeSignature {
             order_.constraints,
             ITradePair(order_.params.tradePair).positionIsShort(order_.params.positionId) ? UsePrice.MAX : UsePrice.MIN
         );
+
+        _transferOrderReward(order_.params.tradePair, maker_, msg.sender);
+
         _partiallyClosePosition(_injectPositionIdToPartiallyCloseOrder(order_).params, maker_);
 
         emit PartiallyClosedPositionViaSignature(order_.params.tradePair, order_.params.positionId, signature_);
@@ -120,7 +124,7 @@ contract TradeManagerOrders is TradeManager, TradeSignature {
         UpdateData[] calldata updateData_,
         address maker_,
         bytes calldata signature_
-    ) external onlyActiveTradePair(order_.params.tradePair) {
+    ) external onlyOrderExecutor onlyActiveTradePair(order_.params.tradePair) {
         _updateContracts(updateData_);
         _processSignatureExtendPosition(order_, maker_, signature_);
 
@@ -128,8 +132,11 @@ contract TradeManagerOrders is TradeManager, TradeSignature {
         _verifyConstraints(
             order_.params.tradePair,
             order_.constraints,
-            ITradePair(order_.params.tradePair).positionIsShort(order_.params.positionId) ? UsePrice.MAX : UsePrice.MIN
+            ITradePair(order_.params.tradePair).positionIsShort(order_.params.positionId) ? UsePrice.MIN : UsePrice.MAX
         );
+
+        _transferOrderReward(order_.params.tradePair, maker_, msg.sender);
+
         _extendPosition(_injectPositionIdToExtendOrder(order_).params, maker_);
 
         emit ExtendedPositionViaSignature(order_.params.tradePair, order_.params.positionId, signature_);
@@ -146,7 +153,7 @@ contract TradeManagerOrders is TradeManager, TradeSignature {
         UpdateData[] calldata updateData_,
         address maker_,
         bytes calldata signature_
-    ) external onlyActiveTradePair(order_.params.tradePair) {
+    ) external onlyOrderExecutor onlyActiveTradePair(order_.params.tradePair) {
         _updateContracts(updateData_);
         _processSignatureExtendPositionToLeverage(order_, maker_, signature_);
 
@@ -154,8 +161,11 @@ contract TradeManagerOrders is TradeManager, TradeSignature {
         _verifyConstraints(
             order_.params.tradePair,
             order_.constraints,
-            ITradePair(order_.params.tradePair).positionIsShort(order_.params.positionId) ? UsePrice.MAX : UsePrice.MIN
+            ITradePair(order_.params.tradePair).positionIsShort(order_.params.positionId) ? UsePrice.MIN : UsePrice.MAX
         );
+
+        _transferOrderReward(order_.params.tradePair, maker_, msg.sender);
+
         _extendPositionToLeverage(_injectPositionIdToExtendToLeverageOrder(order_).params, maker_);
 
         emit ExtendedPositionToLeverageViaSignature(order_.params.tradePair, order_.params.positionId, signature_);
@@ -172,7 +182,7 @@ contract TradeManagerOrders is TradeManager, TradeSignature {
         UpdateData[] calldata updateData_,
         address maker_,
         bytes calldata signature_
-    ) external onlyActiveTradePair(order_.params.tradePair) {
+    ) external onlyOrderExecutor onlyActiveTradePair(order_.params.tradePair) {
         _updateContracts(updateData_);
         _processSignatureAddMarginToPosition(order_, maker_, signature_);
 
@@ -182,6 +192,9 @@ contract TradeManagerOrders is TradeManager, TradeSignature {
             order_.constraints,
             ITradePair(order_.params.tradePair).positionIsShort(order_.params.positionId) ? UsePrice.MAX : UsePrice.MIN
         );
+
+        _transferOrderReward(order_.params.tradePair, maker_, msg.sender);
+
         _addMarginToPosition(_injectPositionIdToAddMarginOrder(order_).params, maker_);
 
         emit AddedMarginToPositionViaSignature(order_.params.tradePair, order_.params.positionId, signature_);
@@ -198,7 +211,7 @@ contract TradeManagerOrders is TradeManager, TradeSignature {
         UpdateData[] calldata updateData_,
         address maker_,
         bytes calldata signature_
-    ) external onlyActiveTradePair(order_.params.tradePair) {
+    ) external onlyOrderExecutor onlyActiveTradePair(order_.params.tradePair) {
         _updateContracts(updateData_);
         _processSignatureRemoveMarginFromPosition(order_, maker_, signature_);
 
@@ -208,6 +221,9 @@ contract TradeManagerOrders is TradeManager, TradeSignature {
             order_.constraints,
             ITradePair(order_.params.tradePair).positionIsShort(order_.params.positionId) ? UsePrice.MAX : UsePrice.MIN
         );
+
+        _transferOrderReward(order_.params.tradePair, maker_, msg.sender);
+
         _removeMarginFromPosition(_injectPositionIdToRemoveMarginOrder(order_).params, maker_);
 
         emit RemovedMarginFromPositionViaSignature(order_.params.tradePair, order_.params.positionId, signature_);
@@ -387,5 +403,37 @@ contract TradeManagerOrders is TradeManager, TradeSignature {
 
             newOrder.params.positionId = tradeId.positionId;
         }
+    }
+
+    /**
+     * @notice transfers the order reward from maker to executor
+     * @param tradePair_ address of the trade pair (collateral is read from tradePair)
+     * @param from_ address of the maker
+     * @param to_ address of the executor
+     */
+    function _transferOrderReward(address tradePair_, address from_, address to_) internal {
+        IERC20 collateral = ITradePair(tradePair_).collateral();
+        uint256 orderReward = controller.orderRewardOfCollateral(address(collateral));
+        if (orderReward > 0) {
+            collateral.safeTransferFrom(from_, to_, orderReward);
+        }
+
+        emit OrderRewardTransfered(address(collateral), from_, to_, orderReward);
+    }
+
+    /* ========== RESCTRICTION FUNCTIONS ========== */
+
+    function _verifyOrderExecutor() internal view {
+        require(
+            controller.isOrderExecutor(msg.sender),
+            "TradeManagerOrders::_verifyOrderExecutor: Sender is not order executor"
+        );
+    }
+
+    /* =========== MODIFIER =========== */
+
+    modifier onlyOrderExecutor() {
+        _verifyOrderExecutor();
+        _;
     }
 }

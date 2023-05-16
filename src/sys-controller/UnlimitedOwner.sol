@@ -2,7 +2,7 @@
 
 pragma solidity 0.8.17;
 
-import "@openzeppelin-upgradeable/contracts/access/OwnableUpgradeable.sol";
+import "@openzeppelin-upgradeable/contracts/access/Ownable2StepUpgradeable.sol";
 import "../interfaces/IUnlimitedOwner.sol";
 
 /**
@@ -12,11 +12,14 @@ import "../interfaces/IUnlimitedOwner.sol";
  * This implementation acts as a simple central Unlimited owner oracle.
  * All Unlimited contracts should refer to this contract to check the owner of the Unlimited.
  */
-contract UnlimitedOwner is IUnlimitedOwner, OwnableUpgradeable {
+contract UnlimitedOwner is IUnlimitedOwner, Ownable2StepUpgradeable {
+    constructor() {
+        _disableInitializers();
+    }
     /* ========== INITIALIZER ========== */
 
     function initialize() external initializer {
-        __Ownable_init();
+        __Ownable2Step_init();
     }
 
     /* ========== VIEWS ========== */

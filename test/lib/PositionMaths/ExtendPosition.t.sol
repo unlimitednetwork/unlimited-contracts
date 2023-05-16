@@ -5,11 +5,10 @@ pragma solidity 0.8.17;
 import "forge-std/Test.sol";
 import "src/lib/PositionMaths.sol";
 import "test/setup/Constants.sol";
+import "test/setup/WithPositionMaths.t.sol";
 
-contract ExtendPositionTest is Test {
+contract ExtendPositionTest is Test, WithPositionMaths {
     using PositionMaths for Position;
-
-    Position position;
 
     function setUp() public {
         vm.warp(0);
@@ -21,11 +20,12 @@ contract ExtendPositionTest is Test {
             lastBorrowFeeAmount: 0,
             pastFundingFeeIntegral: 0,
             lastFundingFeeAmount: 0,
+            collectedFundingFeeAmount: 0,
+            collectedBorrowFeeAmount: 0,
             lastFeeCalculationAt: uint48(block.timestamp),
             openedAt: uint48(block.timestamp),
             isShort: IS_SHORT_0,
             owner: msg.sender,
-            assetDecimals: ASSET_DECIMALS,
             lastAlterationBlock: uint40(block.number)
         });
     }
@@ -82,8 +82,11 @@ contract ExtendPositionTest is Test {
 
     function testExtendToLeverageWithFeeAndProfit() public {
         // ARRANGE
-        uint256 addedSize = VOLUME_0 * ASSET_MULTIPLIER / uint256(ASSET_PRICE_1);
-        int256 expectedEntryPrice = int256(VOLUME_0 * 2 * ASSET_MULTIPLIER / (ASSET_AMOUNT_0 + addedSize));
+        uint256 addedSize =
+            VOLUME_0 * ASSET_MULTIPLIER * PRICE_MULTIPLIER / uint256(ASSET_PRICE_1) / COLLATERAL_MULTIPLIER;
+        int256 expectedEntryPrice = int256(
+            VOLUME_0 * 2 * ASSET_MULTIPLIER * PRICE_MULTIPLIER / COLLATERAL_MULTIPLIER / (ASSET_AMOUNT_0 + addedSize)
+        );
 
         // ACT
         position.updateFees(BORROW_FEE_INTEGRAL_0, FUNDING_FEE_INTEGRAL_0);
@@ -101,7 +104,9 @@ contract ExtendPositionTest is Test {
     function testExtendWithFeeAndProfit() public {
         // ARRANGE
         uint256 addedSize = VOLUME_0 * ASSET_MULTIPLIER / uint256(ASSET_PRICE_1);
-        int256 expectedEntryPrice = int256(VOLUME_0 * 2 * ASSET_MULTIPLIER / (ASSET_AMOUNT_0 + addedSize));
+        int256 expectedEntryPrice = int256(
+            VOLUME_0 * 2 * ASSET_MULTIPLIER * PRICE_MULTIPLIER / COLLATERAL_MULTIPLIER / (ASSET_AMOUNT_0 + addedSize)
+        );
         uint256 expectedLeverage = VOLUME_0 * 2 * LEVERAGE_MULTIPLIER / (NET_MARGIN_0 + MARGIN_0);
 
         // ACT

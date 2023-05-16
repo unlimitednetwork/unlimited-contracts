@@ -18,13 +18,7 @@ contract ClosePositionTest is Test, WithTradePair {
 
     function testTransfersEquityBack() public {
         tradePair.closePosition(address(ALICE), positionId);
-        assertEq(collateral.balanceOf(ALICE), MARGIN_0 - MARGIN_0 * BASE_USER_FEE / BPS_MULTIPLIER);
-    }
-
-    function testPositionIdsOf() public {
-        assertEq(tradePair.positionIdsOf(address(ALICE)).length, 1);
-        tradePair.closePosition(address(ALICE), positionId);
-        assertEq(tradePair.positionIdsOf(address(ALICE)).length, 0);
+        assertEq(collateral.balanceOf(ALICE), BALANCE_AFTER_CLOSE_0);
     }
 
     function testResetAllowance() public {

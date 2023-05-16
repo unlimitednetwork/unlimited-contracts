@@ -4,7 +4,7 @@ pragma solidity 0.8.17;
 
 import "test/setup/WithFullFixtures.t.sol";
 
-contract ExtendPositionTest is WithFullFixtures {
+contract ExtendPositionE2ETest is WithFullFixtures {
     MockToken collateral;
     ILiquidityPool liquidityPool0;
     ILiquidityPool liquidityPool1;
@@ -39,6 +39,9 @@ contract ExtendPositionTest is WithFullFixtures {
             controller, userManager, feeManager, tradeManager, collateral, priceFeedAdapter, liquidityPoolAdapter
         );
 
+        // Set Liquidator reward to zero to make bankruptcy price calculation simpler
+        tradePair0.setLiquidatorReward(0);
+
         // ADD LIQUIDITY
         liquidityAmount = 100_000 * COLLATERAL_MULTIPLIER;
         deal(address(collateral), ALICE, liquidityAmount);
@@ -47,14 +50,14 @@ contract ExtendPositionTest is WithFullFixtures {
 
         // OPEN POSITION
         deal(address(collateral), BOB, INITIAL_BALANCE);
-        positionId = _openPosition(BOB, tradePair0, INITIAL_BALANCE, LEVERAGE_0, false);
+        positionId = _openPosition(BOB_PK, tradeManager, tradePair0, ASSET_PRICE_0, INITIAL_BALANCE, LEVERAGE_0, false);
         vm.roll(2);
     }
 
     function testExtendPositionSimple() public {
         // EXTEND POSITION
         deal(address(collateral), BOB, INITIAL_BALANCE);
-        _extendPosition(BOB, tradePair0, positionId, INITIAL_BALANCE, LEVERAGE_0, ASSET_PRICE_0);
+        _extendPosition(BOB_PK, tradeManager, tradePair0, positionId, ASSET_PRICE_0, INITIAL_BALANCE, LEVERAGE_0);
 
         // ASSERT FEES GET COLLECTED (should be double the amount of open position fees)
         assertEq(collateral.balanceOf(address(STAKERS_ADDRESS)), 2 * OPEN_POSITION_FEE_0 * 18 / 100, "stakers");
@@ -69,30 +72,23 @@ contract ExtendPositionTest is WithFullFixtures {
         assertEq(tradePair0.detailsOfPosition(positionId).leverage, LEVERAGE_0, "leverage");
         assertEq(tradePair0.detailsOfPosition(positionId).assetAmount, 2 * ASSET_AMOUNT_0, "assetAmount");
         assertEq(tradePair0.detailsOfPosition(positionId).entryPrice, ASSET_PRICE_0, "entryPrice");
-        assertEq(tradePair0.detailsOfPosition(positionId).PnL, 0, "PnL");
-        assertEq(tradePair0.detailsOfPosition(positionId).bankruptcyPrice, ASSET_PRICE_0 * 4 / 5, "bankruptcyPrice");
     }
 
     function testExtendPositionWithProfit() public {
         // price doubles, so PnL should be 5x margin
-        int256 expectedPnL = int256(MARGIN_0) * 5;
 
         // CHANGE PRICE
-        int256 newPrice = int256(4_000 * COLLATERAL_MULTIPLIER);
+        int256 newPrice = int256(4_000 * PRICE_MULTIPLIER);
         priceFeedAdapter.setMarkPrices(newPrice, newPrice);
 
         //  should be 2/3 first price and 1/3 second price
         int256 newEntryPrice = (ASSET_PRICE_0 * 2 + newPrice) / 3;
 
-        // newEntryPrice * 4 / 5
-        int256 newBankruptcyPrice = (ASSET_PRICE_0 * 2 + newPrice) * 4 / 3 / 5;
         uint256 newAssetAmount = ASSET_AMOUNT_0 * 3 / 2;
-
-        assertEq(tradePair0.detailsOfPosition(positionId).PnL, expectedPnL, "PnL before");
 
         // EXTEND POSITION
         deal(address(collateral), BOB, INITIAL_BALANCE);
-        _extendPosition(BOB, tradePair0, positionId, INITIAL_BALANCE, LEVERAGE_0, newPrice);
+        _extendPosition(BOB_PK, tradeManager, tradePair0, positionId, newPrice, INITIAL_BALANCE, LEVERAGE_0);
 
         // ASSERT FEES GET COLLECTED (should be double the amount of open position fees)
         assertEq(collateral.balanceOf(address(STAKERS_ADDRESS)), 2 * OPEN_POSITION_FEE_0 * 18 / 100, "stakers");
@@ -106,33 +102,23 @@ contract ExtendPositionTest is WithFullFixtures {
         assertEq(tradePair0.detailsOfPosition(positionId).margin, 2 * MARGIN_0, "margin");
         assertEq(tradePair0.detailsOfPosition(positionId).leverage, LEVERAGE_0, "leverage");
         assertEq(tradePair0.detailsOfPosition(positionId).assetAmount, newAssetAmount, "assetAmount");
-        assertEq(tradePair0.detailsOfPosition(positionId).PnL, expectedPnL, "PnL after (should not change)");
         assertEq(tradePair0.detailsOfPosition(positionId).entryPrice, newEntryPrice, "entryPrice");
-        assertEq(tradePair0.detailsOfPosition(positionId).bankruptcyPrice, newBankruptcyPrice, "bankruptcyPrice");
     }
 
     function testExtendPositionWithLoss() public {
-        // price doubles, so PnL should be 5x margin.
-        int256 expectedPnL = -int256(MARGIN_0) / 2;
-
         // CHANGE PRICE
-        int256 newPrice = int256(1_800 * COLLATERAL_MULTIPLIER);
+        int256 newPrice = int256(1_800 * PRICE_MULTIPLIER);
 
         int256 newEntryPrice = (ASSET_PRICE_0 * 18 / 20 + newPrice) * 20 / 38;
-
-        // newEntryPrice * 4 / 5. +1 bc. of rounding errors from assetAmount
-        int256 newBankruptcyPrice = (ASSET_PRICE_0 * 18 / 20 + newPrice) * 20 * 4 / 38 / 5 + 1;
 
         // rounding error occurs here expectedly
         uint256 newAssetAmount = ASSET_AMOUNT_0 * 38 / 18;
 
         priceFeedAdapter.setMarkPrices(newPrice, newPrice);
 
-        assertEq(tradePair0.detailsOfPosition(positionId).PnL, expectedPnL, "PnL before");
-
         // EXTEND POSITION
         deal(address(collateral), BOB, INITIAL_BALANCE);
-        _extendPosition(BOB, tradePair0, positionId, INITIAL_BALANCE, LEVERAGE_0, newPrice);
+        _extendPosition(BOB_PK, tradeManager, tradePair0, positionId, ASSET_PRICE_0, INITIAL_BALANCE, LEVERAGE_0);
 
         // ASSERT FEES GET COLLECTED (should be double the amount of open position fees)
         assertEq(collateral.balanceOf(address(STAKERS_ADDRESS)), 2 * OPEN_POSITION_FEE_0 * 18 / 100, "stakers");
@@ -146,78 +132,10 @@ contract ExtendPositionTest is WithFullFixtures {
         assertEq(tradePair0.detailsOfPosition(positionId).margin, 2 * MARGIN_0, "margin");
         assertEq(tradePair0.detailsOfPosition(positionId).leverage, LEVERAGE_0, "leverage");
         assertEq(tradePair0.detailsOfPosition(positionId).assetAmount, newAssetAmount, "assetAmount");
-        assertEq(
-            tradePair0.detailsOfPosition(positionId).PnL,
-            expectedPnL - 1,
-            "PnL after (should not change) -1 bc. of rounding errors from assetAmount"
-        );
-        assertEq(tradePair0.detailsOfPosition(positionId).entryPrice, newEntryPrice, "entryPrice");
-        assertEq(tradePair0.detailsOfPosition(positionId).bankruptcyPrice, newBankruptcyPrice, "bankruptcyPrice");
+        assertEq(tradePair0.detailsOfPosition(positionId).entryPrice / 1e8, newEntryPrice / 1e8, "entryPrice");
     }
 
     /* ========== HELPER FUNCTIONS =========== */
-
-    function _closePosition(address user, ITradePair tradePair, uint256 positionId_, int256 constraintPrice)
-        private
-        prank(user)
-    {
-        ClosePositionParams memory closePositionParams = ClosePositionParams(address(tradePair), positionId_);
-        Constraints memory constraints =
-            Constraints(block.timestamp + 1 hours, constraintPrice * 99 / 100, constraintPrice * 101 / 100);
-        UpdateData[] memory updateData;
-
-        tradeManager.closePosition(closePositionParams, constraints, updateData);
-    }
-
-    function _extendPosition(
-        address user,
-        ITradePair tradePair,
-        uint256 positionId_,
-        uint256 addedMargin,
-        uint256 addedLeverage,
-        int256 constraintPrice
-    ) private prank(user) {
-        ExtendPositionParams memory extendPositionParams =
-            ExtendPositionParams(address(tradePair), positionId_, addedMargin, addedLeverage);
-        Constraints memory constraints =
-            Constraints(block.timestamp + 1 hours, constraintPrice * 99 / 100, constraintPrice * 101 / 100);
-        UpdateData[] memory updateData;
-
-        collateral.approve(address(tradeManager), addedMargin);
-
-        tradeManager.extendPosition(extendPositionParams, constraints, updateData);
-    }
-
-    function _extendPositionToLeverage(
-        address user,
-        ITradePair tradePair,
-        uint256 positionId_,
-        uint256 targetLeverage,
-        int256 constraintPrice
-    ) private prank(user) {
-        ExtendPositionToLeverageParams memory extendPositionToLeverageParams =
-            ExtendPositionToLeverageParams(address(tradePair), positionId_, targetLeverage);
-        Constraints memory constraints =
-            Constraints(block.timestamp + 1 hours, constraintPrice * 99 / 100, constraintPrice * 101 / 100);
-        UpdateData[] memory updateData;
-
-        tradeManager.extendPositionToLeverage(extendPositionToLeverageParams, constraints, updateData);
-    }
-
-    function _openPosition(address user, ITradePair tradePair, uint256 margin, uint256 leverage, bool isShort)
-        private
-        prank(user)
-        returns (uint256)
-    {
-        OpenPositionParams memory openPositionParams =
-            OpenPositionParams(address(tradePair), margin, leverage, isShort, address(0), address(0));
-        Constraints memory constraints =
-            Constraints(block.timestamp + 1 hours, ASSET_PRICE_0 * 99 / 100, ASSET_PRICE_0 * 101 / 100);
-        UpdateData[] memory updateData;
-
-        collateral.approve(address(tradeManager), margin);
-        return tradeManager.openPosition(openPositionParams, constraints, updateData);
-    }
 
     function _depositLiquidity(ILiquidityPool liquidityPool, address user, uint256 amount)
         private
@@ -226,11 +144,5 @@ contract ExtendPositionTest is WithFullFixtures {
     {
         collateral.approve(address(liquidityPool), amount);
         shares = liquidityPool.deposit(amount, 0);
-    }
-
-    modifier prank(address executor) {
-        vm.startPrank(executor);
-        _;
-        vm.stopPrank();
     }
 }

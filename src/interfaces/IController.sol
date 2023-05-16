@@ -29,6 +29,12 @@ interface IController {
 
     event SignerRemoved(address indexed signer);
 
+    event OrderExecutorAdded(address indexed orderExecutor);
+
+    event OrderExecutorRemoved(address indexed orderExecutor);
+
+    event SetOrderRewardOfCollateral(address indexed collateral_, uint256 reward_);
+
     /* ========== VIEW FUNCTIONS ========== */
 
     /// @notice Is trade pair registered
@@ -49,8 +55,14 @@ interface IController {
     /// @notice Is Signer registered
     function isSigner(address signer) external view returns (bool);
 
+    /// @notice Is order executor registered
+    function isOrderExecutor(address orderExecutor) external view returns (bool);
+
     /// @notice Reverts if trade pair inactive
     function checkTradePairActive(address tradePair) external view;
+
+    /// @notice Returns order reward for collateral token
+    function orderRewardOfCollateral(address collateral) external view returns (uint256);
 
     /* ========== MUTATIVE FUNCTIONS ========== */
 
@@ -85,6 +97,11 @@ interface IController {
     function addSigner(address) external;
 
     /**
+     * @notice Adds order executor to the registry
+     */
+    function addOrderExecutor(address) external;
+
+    /**
      * @notice Removes the trade pair from the registry
      */
     function removeTradePair(address tradePair) external;
@@ -113,4 +130,14 @@ interface IController {
      * @notice Removes signer from the registry
      */
     function removeSigner(address) external;
+
+    /**
+     * @notice Removes order executor from the registry
+     */
+    function removeOrderExecutor(address) external;
+
+    /**
+     * @notice Sets order reward for collateral token
+     */
+    function setOrderRewardOfCollateral(address, uint256) external;
 }

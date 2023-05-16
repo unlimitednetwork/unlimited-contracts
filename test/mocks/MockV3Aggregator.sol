@@ -2,7 +2,7 @@
 
 pragma solidity 0.8.17;
 
-import "src/external/interfaces/chainlink/AggregatorV2V3Interface.sol";
+import "src/external/interfaces/chainlink/AggregatorV3Interface.sol";
 
 /**
  * @title MockV3Aggregator
@@ -12,16 +12,16 @@ import "src/external/interfaces/chainlink/AggregatorV2V3Interface.sol";
  * its answer is unimportant
  * @notice first round starts at 1
  */
-contract MockV3Aggregator is AggregatorV2V3Interface {
+contract MockV3Aggregator is AggregatorV3Interface {
     uint256 public constant override version = 0;
 
     uint8 public override decimals;
-    int256 public override latestAnswer;
-    uint256 public override latestTimestamp;
-    uint256 public override latestRound;
+    int256 latestAnswer;
+    uint256 latestTimestamp;
+    uint256 latestRound;
 
-    mapping(uint256 => int256) public override getAnswer;
-    mapping(uint256 => uint256) public override getTimestamp;
+    mapping(uint256 => int256) public getAnswer;
+    mapping(uint256 => uint256) public getTimestamp;
     mapping(uint256 => uint256) private getStartedAt;
 
     /// @notice this function is necessary to exclude this contract from test coverage

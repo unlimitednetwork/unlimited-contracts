@@ -4,6 +4,7 @@ pragma solidity 0.8.17;
 
 import "forge-std/Test.sol";
 
+import "test/mocks/MockArbSys.sol";
 import "test/mocks/MockToken.sol";
 import "test/mocks/MockUnlimitedOwner.sol";
 import "test/mocks/MockPriceFeedAdapter.sol";
@@ -51,6 +52,9 @@ contract WithMocks is Test {
         mockTradePair = new MockTradePair();
         mockTradePair.setCollateral(collateral);
         mockController = new MockController();
+
+        // Setup Arbitrum environment
+        vm.etch(address(100), address(new MockArbSys()).code);
     }
 
     function dealTokens(address toAddress, uint256 amount) public {

@@ -3,7 +3,6 @@
 pragma solidity 0.8.17;
 
 import "../interfaces/IPriceFeedAggregator.sol";
-import "../external/interfaces/chainlink/AggregatorV2V3Interface.sol";
 import "../shared/UnlimitedOwnable.sol";
 
 /**
@@ -94,8 +93,8 @@ contract PriceFeedAggregator is IPriceFeedAggregator, UnlimitedOwnable {
 
     function _minMaxFromMultiplePriceFeeds() internal view returns (int256, int256) {
         int256 _minPrice = type(int256).max;
-        int256 _maxPrice = 0;
-        for (uint256 i = 0; i < priceFeeds.length; i++) {
+        int256 _maxPrice;
+        for (uint256 i; i < priceFeeds.length; ++i) {
             int256 _price = priceFeeds[i].price();
             if (_price < _minPrice) {
                 _minPrice = _price;

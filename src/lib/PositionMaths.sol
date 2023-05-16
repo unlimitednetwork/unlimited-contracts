@@ -2,24 +2,29 @@
 
 pragma solidity 0.8.17;
 
-import "./../shared/Constants.sol";
-import "forge-std/console.sol";
-/* ========== STRUCTS ========== */
+import "@openzeppelin/contracts/utils/math/Math.sol";
 
+import "./../shared/Constants.sol";
+
+interface ITradePair_Multiplier {
+    function collateralToPriceMultiplier() external view returns (uint256);
+}
+
+/* ========== STRUCTS ========== */
 /**
  * @notice Struct to store details of a position
  * @custom:member margin the margin of the position
  * @custom:member volume the volume of the position
- * @custom:member assetAmount the underlying amount of assets. Denominated with assetDecimals
+ * @custom:member assetAmount the underlying amount of assets. Normalized to  ASSET_DECIMALS
  * @custom:member pastBorrowFeeIntegral the integral of borrow fee at the moment of opening or last fee update
  * @custom:member lastBorrowFeeAmount the last borrow fee amount at the moment of last fee update
  * @custom:member pastFundingFeeIntegral the integral of funding fee at the moment of opening or last fee update
  * @custom:member lastFundingFeeAmount the last funding fee amount at the moment of last fee update
+ * @custom:member collectedFundingFeeAmount the total collected funding fee amount, to add up the total funding fee amount
  * @custom:member lastFeeCalculationAt moment of the last fee update
  * @custom:member openedAt moment of the position opening
  * @custom:member isShort bool if the position is short
  * @custom:member owner the owner of the position
- * @custom:member assetDecimals the decimals of the asset (needed internally)
  * @custom:member lastAlterationBlock the last block where the position was altered or opened
  */
 struct Position {
@@ -28,13 +33,14 @@ struct Position {
     uint256 assetAmount;
     int256 pastBorrowFeeIntegral;
     int256 lastBorrowFeeAmount;
+    int256 collectedBorrowFeeAmount;
     int256 pastFundingFeeIntegral;
     int256 lastFundingFeeAmount;
+    int256 collectedFundingFeeAmount;
     uint48 lastFeeCalculationAt;
     uint48 openedAt;
     bool isShort;
     address owner;
-    uint16 assetDecimals;
     uint40 lastAlterationBlock;
 }
 
@@ -56,7 +62,7 @@ library PositionMaths {
     }
 
     function _entryPrice(Position storage self) internal view returns (int256) {
-        return int256(self.volume * 10 ** self.assetDecimals / self.assetAmount);
+        return int256(self.volume * collateralToPriceMultiplier() * ASSET_MULTIPLIER / self.assetAmount);
     }
 
     /**
@@ -85,7 +91,7 @@ library PositionMaths {
         if (lastNetMargin_ == 0) {
             return type(uint256).max;
         }
-        return self.volume * LEVERAGE_MULTIPLIER / self._lastNetMargin();
+        return self.volume * LEVERAGE_MULTIPLIER / lastNetMargin_;
     }
 
     /**
@@ -150,16 +156,39 @@ library PositionMaths {
     }
 
     /**
-     * @notice Bankruptcy price
-     * @return bankruptcyPrice int
+     * @notice Liquidation price takes into account fee-reduced collateral and absolute maintenance margin
+     * @return liquidationPrice int
      */
-    function bankruptcyPrice(Position storage self) public view returns (int256) {
-        return self._bankruptcyPrice();
+    function liquidationPrice(
+        Position storage self,
+        int256 currentBorrowFeeIntegral,
+        int256 currentFundingFeeIntegral,
+        uint256 maintenanceMargin
+    ) public view returns (int256) {
+        return self._liquidationPrice(currentBorrowFeeIntegral, currentFundingFeeIntegral, maintenanceMargin);
     }
 
-    function _bankruptcyPrice(Position storage self) internal view returns (int256) {
+    function _liquidationPrice(
+        Position storage self,
+        int256 currentBorrowFeeIntegral,
+        int256 currentFundingFeeIntegral,
+        uint256 maintenanceMargin
+    ) internal view returns (int256) {
+        // Reduce current margin by liquidator reward
+        int256 liquidatableMargin = int256(self._currentNetMargin(currentBorrowFeeIntegral, currentFundingFeeIntegral))
+            - int256(maintenanceMargin);
+
+        // If margin is zero, position is liquidatable by fee reduction alone.
+        // Return entry price
+        if (liquidatableMargin <= 0) {
+            return self._entryPrice();
+        }
+
+        // Return entryPrice +/- entryPrice / leverage
+        // Where leverage = volume / liquidatableMargin
         return self._entryPrice()
-            - self._shortMultiplier() * int256(self.margin) * int256(10 ** self.assetDecimals) / int256(self.assetAmount);
+            - self._entryPrice() * int256(LEVERAGE_MULTIPLIER) * self._shortMultiplier() * liquidatableMargin
+                / int256(self.volume * LEVERAGE_MULTIPLIER);
     }
 
     function _shortMultiplier(Position storage self) internal view returns (int256) {
@@ -171,7 +200,7 @@ library PositionMaths {
     }
 
     /**
-     * @notice Current Volume
+     * @notice Current Volume is the current mark price times the asset amount (this is not the current value)
      * @param currentPrice int current mark price
      * @return currentVolume uint
      */
@@ -180,7 +209,7 @@ library PositionMaths {
     }
 
     function _currentVolume(Position storage self, int256 currentPrice) internal view returns (uint256) {
-        return self.assetAmount * uint256(currentPrice) / 10 ** self.assetDecimals;
+        return self.assetAmount * uint256(currentPrice) / ASSET_MULTIPLIER / collateralToPriceMultiplier();
     }
 
     /**
@@ -420,15 +449,26 @@ library PositionMaths {
         // And the inverse of that at SHORT
         // @dev At a long position, the delta of size is sold to give back the volume
         // @dev At a short position, the volume delta is used, to "buy" the change of size (and give it back)
-        int256 priceOfSizeDelta = currentPrice * int256(delta.assetAmount) / int256(10 ** self.assetDecimals);
+        int256 priceOfSizeDelta =
+            currentPrice * int256(delta.assetAmount) / int256(collateralToPriceMultiplier()) / int256(ASSET_MULTIPLIER);
         int256 realizedPnL = (priceOfSizeDelta - int256(delta.volume)) * self._shortMultiplier();
 
         int256 payout = int256(delta.margin) + realizedPnL;
 
         // change storage values
-        self.margin -= delta.margin;
+        self.margin -= self.margin * closeProportion / PERCENTAGE_MULTIPLIER;
         self.volume -= delta.volume;
         self.assetAmount -= delta.assetAmount;
+
+        // Update borrow fee amounts
+        self.collectedBorrowFeeAmount +=
+            self.lastBorrowFeeAmount * int256(closeProportion) / int256(PERCENTAGE_MULTIPLIER);
+        self.lastBorrowFeeAmount -= self.lastBorrowFeeAmount * int256(closeProportion) / int256(PERCENTAGE_MULTIPLIER);
+
+        // Update funding fee amounts
+        self.collectedFundingFeeAmount +=
+            self.lastFundingFeeAmount * int256(closeProportion) / int256(PERCENTAGE_MULTIPLIER);
+        self.lastFundingFeeAmount -= self.lastFundingFeeAmount * int256(closeProportion) / int256(PERCENTAGE_MULTIPLIER);
 
         // Return payout for further calculations
         return payout;
@@ -496,7 +536,7 @@ library PositionMaths {
         // calculate changes
         Position memory delta;
         delta.volume = targetLeverage * self._lastNetMargin() / LEVERAGE_MULTIPLIER - self.volume;
-        delta.assetAmount = delta.volume * 10 ** self.assetDecimals / uint256(currentPrice);
+        delta.assetAmount = delta.volume * collateralToPriceMultiplier() * ASSET_MULTIPLIER / uint256(currentPrice);
 
         // store changes
         self.assetAmount += delta.assetAmount;
@@ -514,6 +554,9 @@ library PositionMaths {
         return self.margin > 0;
     }
 
+    /**
+     * @notice Adds all elapsed fees to the fee amounts. After this, the position can be altered.
+     */
     function updateFees(Position storage self, int256 currentBorrowFeeIntegral, int256 currentFundingFeeIntegral)
         public
     {
@@ -537,6 +580,13 @@ library PositionMaths {
         self.pastBorrowFeeIntegral = currentBorrowFeeIntegral;
         self.pastFundingFeeIntegral = currentFundingFeeIntegral;
         self.lastFeeCalculationAt = uint48(block.timestamp);
+    }
+
+    /**
+     * @notice Returns the multiplier from TradePair, as PositionMaths is decimal agnostic
+     */
+    function collateralToPriceMultiplier() private view returns (uint256) {
+        return ITradePair_Multiplier(address(this)).collateralToPriceMultiplier();
     }
 }
 

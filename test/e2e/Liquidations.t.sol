@@ -40,7 +40,8 @@ contract E2ETest is WithFullFixtures {
     function testLiquidation() public {
         // OPEN POSITION
         deal(address(collateral), BOB, INITIAL_BALANCE);
-        uint256 positionIdBob = _openPosition(BOB, tradePair0, INITIAL_BALANCE, LEVERAGE_0, false);
+        uint256 positionIdBob =
+            _openPosition(BOB_PK, tradeManager, tradePair0, ASSET_PRICE_0, INITIAL_BALANCE, LEVERAGE_0, false);
 
         // Increase time and decrease price to 1_800
         vm.warp(1 days + 1 hours);
@@ -85,12 +86,19 @@ contract E2ETest is WithFullFixtures {
         // OPEN SHORT POSITION
         vm.warp(1 hours);
         deal(address(collateral), BOB, INITIAL_BALANCE);
-        uint256 positionIdBob = _openPosition(BOB, tradePair0, INITIAL_BALANCE, LEVERAGE_0, true);
+        uint256 positionIdBob =
+            _openPosition(BOB_PK, tradeManager, tradePair0, ASSET_PRICE_0, INITIAL_BALANCE, LEVERAGE_0, true);
 
         // OPEN LONG POSITION, with 5/2 leverage
         deal(address(collateral), CAROL, INITIAL_BALANCE - OPEN_POSITION_FEE_0 / 2);
         uint256 positionIdCarol = _openPosition(
-            CAROL, tradePair0, INITIAL_BALANCE - OPEN_POSITION_FEE_0 / 2, LEVERAGE_MULTIPLIER * 5 / 2, false
+            CAROL_PK,
+            tradeManager,
+            tradePair0,
+            ASSET_PRICE_0,
+            INITIAL_BALANCE - OPEN_POSITION_FEE_0 / 2,
+            LEVERAGE_MULTIPLIER * 5 / 2,
+            false
         );
 
         // Increase time by 50 hours and decrease price to 1_600 (pos1 +100% pnl, pos2 -50% pnl)
@@ -106,11 +114,12 @@ contract E2ETest is WithFullFixtures {
         _liquidatePosition(ALICE, tradePair0, positionIdBob);
 
         // Now close Carol's position
-        _closePosition(CAROL, tradePair0, positionIdCarol, ASSET_PRICE_0_3);
+        _closePosition(CAROL_PK, tradeManager, tradePair0, positionIdCarol, ASSET_PRICE_0_3);
 
         // ASSERT
         // Carol should have received all the positions equity (minus close fee)
-        uint256 expectedBalanceCarol = (MARGIN_0 / 2 - expectedBorrowFees / 2 + expectedFundingFees) * 999 / 1000;
+        uint256 expectedBalanceCarol =
+            (MARGIN_0 / 2 - expectedBorrowFees / 2 + expectedFundingFees) - VOLUME_0 / 2 / 1000;
         assertEq(collateral.balanceOf(CAROL), expectedBalanceCarol, "carol");
 
         assertEq(collateral.balanceOf(address(tradePair0)), 0, "tradePair0");
@@ -124,49 +133,6 @@ contract E2ETest is WithFullFixtures {
         tradeManager.liquidatePosition(address(tradePair), positionId, updateData);
     }
 
-    function _closePosition(address user, ITradePair tradePair, uint256 positionId, int256 constraintPrice)
-        private
-        prank(user)
-    {
-        ClosePositionParams memory closePositionParams = ClosePositionParams(address(tradePair), positionId);
-        Constraints memory constraints =
-            Constraints(block.timestamp + 1 hours, constraintPrice * 99 / 100, constraintPrice * 101 / 100);
-        UpdateData[] memory updateData;
-
-        tradeManager.closePosition(closePositionParams, constraints, updateData);
-    }
-
-    function _partiallyClosePosition(
-        address user,
-        ITradePair tradePair,
-        uint256 positionId,
-        int256 constraintPrice,
-        uint256 proportion
-    ) private prank(user) {
-        PartiallyClosePositionParams memory partiallyClosePositionParams =
-            PartiallyClosePositionParams(address(tradePair), positionId, proportion);
-        Constraints memory constraints =
-            Constraints(block.timestamp + 1 hours, constraintPrice * 99 / 100, constraintPrice * 101 / 100);
-        UpdateData[] memory updateData;
-
-        tradeManager.partiallyClosePosition(partiallyClosePositionParams, constraints, updateData);
-    }
-
-    function _openPosition(address user, ITradePair tradePair, uint256 margin, uint256 leverage, bool isShort)
-        private
-        prank(user)
-        returns (uint256)
-    {
-        OpenPositionParams memory openPositionParams =
-            OpenPositionParams(address(tradePair), margin, leverage, isShort, address(0), address(0));
-        Constraints memory constraints =
-            Constraints(block.timestamp + 1 hours, ASSET_PRICE_0 * 99 / 100, ASSET_PRICE_0 * 101 / 100);
-        UpdateData[] memory updateData;
-
-        collateral.approve(address(tradeManager), margin);
-        return tradeManager.openPosition(openPositionParams, constraints, updateData);
-    }
-
     function _depositLiquidity(ILiquidityPool liquidityPool, address user, uint256 amount)
         private
         prank(user)
@@ -174,11 +140,5 @@ contract E2ETest is WithFullFixtures {
     {
         collateral.approve(address(liquidityPool), amount);
         shares = liquidityPool.deposit(amount, 0);
-    }
-
-    modifier prank(address executor) {
-        vm.startPrank(executor);
-        _;
-        vm.stopPrank();
     }
 }

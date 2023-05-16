@@ -50,6 +50,8 @@ Main Unlimited Leverage contracts consist of:
 
 Unlimited uses [Foundry](https://book.getfoundry.sh/) as a solidity framework.
 
+The scripts are applicable across all networks; config for each network should be defined in the `.env` file.
+
 ### Install dependencies
 
 - `forge install`
@@ -80,9 +82,32 @@ Compile lcov report to be used by code editor extension and GitHub Jobs (i.e. [C
 
 - `forge coverage --report lcov`
 
+### Copy environment file (Contains local deployment setup)
+- `cp .env.sample .env`
+- `source .env`
+
+### Deploy contracts (local)
+
+- `anvil --order fifo --host 0.0.0.0 --chain-id 1 --block-time 7 --gas-limit 1000000000` 
+- `forge script DeployScript --rpc-url $PROD_RPC_URL --broadcast`
+
+### Deploy contracts (production / testnet)
+-  update .env file with your network, RPC data and deployer key.
+- `source .env`
+- `forge script DeployScript --rpc-url $PROD_RPC_URL --broadcast`
+
+### Upgrade a contract (local)
+- see `deploy/contracts.local.json` for keys
+- to upgrade:
+- `forge script Upgrade --sig "run(string memory)" "CONTRACT" --rpc-url http://0.0.0.0:8545 --broadcast`
+- where `CONTRACT` is a key in the JSON file.
+- some keys are a combination of contract name + id (eg. `tradePairBTC`, `tradePairETH`, where `BTC`/`ETH` are ids). In this case the script must be called like so:
+- `forge script Upgrade --sig "run(string memory,string memory)" "CONTRACT" "ID" --rpc-url http://0.0.0.0:8545 --broadcast`
+
+
 ## Licensing
 
-The primary license for Unlimited Leverate is the Business Source License 1.1 (`BUSL-1.1`), see [`LICENSE`](./LICENSE).
+The primary license for Unlimited Leverage is the Business Source License 1.1 (`BUSL-1.1`), see [`LICENSE`](./LICENSE).
 
 ### Exceptions
 

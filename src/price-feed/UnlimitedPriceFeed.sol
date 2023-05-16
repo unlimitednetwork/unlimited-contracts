@@ -3,7 +3,7 @@
 pragma solidity 0.8.17;
 
 import "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
-import "../external/interfaces/chainlink/AggregatorV2V3Interface.sol";
+import "../external/interfaces/chainlink/AggregatorV3Interface.sol";
 import "../interfaces/IController.sol";
 import "../interfaces/IPriceFeed.sol";
 import "../interfaces/IUpdatable.sol";
@@ -51,7 +51,7 @@ contract UnlimitedPriceFeed is IPriceFeed, IUpdatable, UnlimitedOwnable {
     /// @notice Controller contract.
     IController public immutable controller;
     /// @notice PriceFeed against which the price is compared. Only a maximum deviation is allowed.
-    AggregatorV2V3Interface public immutable chainlinkPriceFeed;
+    AggregatorV3Interface public immutable chainlinkPriceFeed;
     /// @notice Maximum deviation from the chainlink price feed
     uint256 public maxDeviation;
     /// @notice Recent price data. It gets updated with each valid update request.
@@ -66,7 +66,7 @@ contract UnlimitedPriceFeed is IPriceFeed, IUpdatable, UnlimitedOwnable {
      */
     constructor(
         IUnlimitedOwner unlimitedOwner_,
-        AggregatorV2V3Interface chainlinkPriceFeed_,
+        AggregatorV3Interface chainlinkPriceFeed_,
         IController controller_,
         uint256 maxDeviation_
     ) UnlimitedOwnable(unlimitedOwner_) {
@@ -114,7 +114,19 @@ contract UnlimitedPriceFeed is IPriceFeed, IUpdatable, UnlimitedOwnable {
         _verifyValidTo(newPriceData.validTo);
 
         // verify price deviation is not too high
-        int256 chainlinkPrice = chainlinkPriceFeed.latestAnswer();
+        (uint80 assetbaseRoundID, int256 answer,, uint256 baseTimestamp, uint80 baseAnsweredInRound) =
+            chainlinkPriceFeed.latestRoundData();
+        require(answer > 0, "UnlimitedPriceFeedAdapter::_getChainLinkPrice:assetChainlinkPriceFeed: answer <= 0");
+        require(
+            baseAnsweredInRound >= assetbaseRoundID,
+            "UnlimitedPriceFeedAdapter::_getChainLinkPrice:assetChainlinkPriceFeed: stale price"
+        );
+        require(
+            baseTimestamp > 0,
+            "UnlimitedPriceFeedAdapter::_getChainLinkPrice:assetChainlinkPriceFeed: round not complete"
+        );
+
+        int256 chainlinkPrice = answer;
 
         unchecked {
             int256 maxAbsoluteDeviation = int256(uint256(chainlinkPrice) * maxDeviation / FULL_PERCENT);

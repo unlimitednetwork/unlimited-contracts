@@ -67,11 +67,17 @@ contract MockTradeManager is ITradeManager {
         returns (bool[][] memory canLiquidate)
     {}
 
+    function canLiquidatePositionsAtPrices(
+        address[] calldata tradePairs_,
+        uint256[][] calldata positionIds_,
+        int256[] calldata prices_
+    ) external view returns (bool[][] memory canLiquidate) {}
+
     function getCurrentFundingFeeRates(address _tradePair)
         public
         view
         returns (int256 longFundingFeeRate, int256 shortFundingFeeRate)
     {}
 
-    function totalSizeLimitOfTradePair(address tradePair_) public view returns (uint256) {}
+    function totalVolumeLimitOfTradePair(address tradePair_) public view returns (uint256) {}
 }

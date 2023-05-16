@@ -31,6 +31,9 @@ contract LiquidityPoolAdapter is ILiquidityPoolAdapter, UnlimitedOwnable, Initia
     /// @notice List of liquidity pools configurations used by the adapter
     LiquidityPoolConfig[] public liquidityPools;
 
+    // Storage gap
+    uint256[50] __gap;
+
     /**
      * @notice Constructs the `LiquidityPoolAdapter` contract.
      * @param unlimitedOwner_ The address of the unlimited owner.
@@ -81,7 +84,7 @@ contract LiquidityPoolAdapter is ILiquidityPoolAdapter, UnlimitedOwnable, Initia
 
         delete liquidityPools;
 
-        for (uint256 i; i < liquidityPools_.length; i++) {
+        for (uint256 i; i < liquidityPools_.length; ++i) {
             require(
                 controller.isLiquidityPool(liquidityPools_[i].poolAddress),
                 "LiquidityPoolAdapter::_updateLiquidityPools: Invalid pool"
@@ -127,7 +130,7 @@ contract LiquidityPoolAdapter is ILiquidityPoolAdapter, UnlimitedOwnable, Initia
      */
     function availableLiquidity() public view returns (uint256) {
         uint256 _totalAvailableLiquidity;
-        for (uint256 i = 0; i < liquidityPools.length; i++) {
+        for (uint256 i; i < liquidityPools.length; ++i) {
             uint256 poolLiquidity = ILiquidityPool(liquidityPools[i].poolAddress).availableLiquidity();
             _totalAvailableLiquidity += poolLiquidity * liquidityPools[i].percentage / FULL_PERCENT;
         }
@@ -157,7 +160,7 @@ contract LiquidityPoolAdapter is ILiquidityPoolAdapter, UnlimitedOwnable, Initia
         uint256[] memory poolLiquidities = new uint256[](_liquidityPools.length);
 
         uint256 _totalAvailableLiquidity;
-        for (uint256 i = 0; i < poolLiquidities.length; i++) {
+        for (uint256 i; i < poolLiquidities.length; ++i) {
             uint256 poolLiquidity = ILiquidityPool(_liquidityPools[i].poolAddress).availableLiquidity();
             poolLiquidities[i] = poolLiquidity * _liquidityPools[i].percentage / FULL_PERCENT;
             _totalAvailableLiquidity += poolLiquidities[i];
@@ -172,7 +175,7 @@ contract LiquidityPoolAdapter is ILiquidityPoolAdapter, UnlimitedOwnable, Initia
 
         if (requestedPayout_ > 0) {
             // request payouts from pools
-            for (uint256 i = 0; i < poolLiquidities.length; i++) {
+            for (uint256 i; i < poolLiquidities.length; ++i) {
                 uint256 poolPayout = requestedPayout_ * poolLiquidities[i] / _totalAvailableLiquidity;
                 actualPayout += poolPayout;
 
@@ -219,7 +222,7 @@ contract LiquidityPoolAdapter is ILiquidityPoolAdapter, UnlimitedOwnable, Initia
         uint256[] memory poolLiquidities = new uint256[](_liquidityPools.length);
 
         uint256 _totalAvailableLiquidity;
-        for (uint256 i; i < poolLiquidities.length; i++) {
+        for (uint256 i; i < poolLiquidities.length; ++i) {
             uint256 poolLiquidity = ILiquidityPool(_liquidityPools[i].poolAddress).availableLiquidity();
             poolLiquidities[i] = poolLiquidity * _liquidityPools[i].percentage / FULL_PERCENT;
             _totalAvailableLiquidity += poolLiquidities[i];
@@ -227,7 +230,7 @@ contract LiquidityPoolAdapter is ILiquidityPoolAdapter, UnlimitedOwnable, Initia
 
         // if total available liquidity is 0, so no pools have any liquidity, distribute equally
         if (_totalAvailableLiquidity == 0) {
-            for (uint256 i; i < poolLiquidities.length; i++) {
+            for (uint256 i; i < poolLiquidities.length; ++i) {
                 poolLiquidities[i] = 1;
                 _totalAvailableLiquidity++;
             }
@@ -235,7 +238,7 @@ contract LiquidityPoolAdapter is ILiquidityPoolAdapter, UnlimitedOwnable, Initia
 
         // deposit profits to pools
         uint256 depositedProfit;
-        for (uint256 i; i < poolLiquidities.length - 1; i++) {
+        for (uint256 i; i < poolLiquidities.length - 1; ++i) {
             uint256 poolAmount = amount_ * poolLiquidities[i] / _totalAvailableLiquidity;
             depositedProfit += poolAmount;
 

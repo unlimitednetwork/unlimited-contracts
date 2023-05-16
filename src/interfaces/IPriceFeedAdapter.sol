@@ -11,6 +11,10 @@ import "../interfaces/IPriceFeedAggregator.sol";
 interface IPriceFeedAdapter {
     function name() external view returns (string memory);
 
+    /* ============ DECIMALS ============ */
+
+    function collateralDecimals() external view returns (uint256);
+
     /* ============ ASSET - COLLATERAL CONVERSION ============ */
 
     function collateralToAssetMin(uint256 collateralAmount) external view returns (uint256);

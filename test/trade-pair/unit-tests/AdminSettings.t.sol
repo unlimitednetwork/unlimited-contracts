@@ -14,17 +14,19 @@ contract TradePairAdminSettingsTest is Test, WithTradePair {
 
     function testInitialize() public {
         // ACT
-        tradePair = new TradePair(
+        TradePair tradePairImplementation = new TradePair(
             mockUnlimitedOwner,
             mockTradeManager,
             mockUserManager,
             mockFeeManager
         );
 
+        tradePair =
+            TradePair(address(new TransparentUpgradeableProxy(address(tradePairImplementation), address(1), "")));
+
         tradePair.initialize({
             name: "Ethereum Trade Pair",
             collateral: collateral,
-            assetDecimals: ASSET_DECIMALS,
             priceFeedAdapter: mockPriceFeedAdapter,
             liquidityPoolAdapter: mockLiquidityPoolAdapter
         });

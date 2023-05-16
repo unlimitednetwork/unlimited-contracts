@@ -16,9 +16,14 @@ contract PriceFeedAdapter is IPriceFeedAdapter {
     /// @notice Price Feed Aggregator for the collateral
     IPriceFeedAggregator immutable collateralPriceFeedAggregator;
 
+    uint256 public immutable assetDecimals;
+    uint256 public immutable collateralDecimals;
+    uint256 public immutable priceDecimals;
+
     string public override name;
     uint256 private immutable ASSET_MULTIPLIER;
     uint256 private immutable COLLATERAL_MULTIPLIER;
+    uint256 private immutable PRICE_MULTIPLIER;
 
     /* ========== CONSTRUCTOR ========== */
 
@@ -29,19 +34,27 @@ contract PriceFeedAdapter is IPriceFeedAdapter {
      * @param collateralPriceFeedAggregator_ The address of the price feed aggregator for the collateral.
      * @param assetDecimals_ The decimals of the asset.
      * @param collateralDecimals_ The decimals of the collateral.
+     * @param priceDecimals_ The decimals of the price.
      */
     constructor(
         string memory name_,
         IPriceFeedAggregator assetPriceFeedAggregator_,
         IPriceFeedAggregator collateralPriceFeedAggregator_,
         uint256 assetDecimals_,
-        uint256 collateralDecimals_
+        uint256 collateralDecimals_,
+        uint256 priceDecimals_
     ) {
         name = name_;
         assetPriceFeedAggregator = assetPriceFeedAggregator_;
         collateralPriceFeedAggregator = collateralPriceFeedAggregator_;
+
+        assetDecimals = assetDecimals_;
+        collateralDecimals = collateralDecimals_;
+        priceDecimals = priceDecimals_;
+
         ASSET_MULTIPLIER = 10 ** assetDecimals_;
         COLLATERAL_MULTIPLIER = 10 ** collateralDecimals_;
+        PRICE_MULTIPLIER = 10 ** priceDecimals_;
     }
 
     /* ============ ASSET - COLLATERAL CONVERSION ============ */

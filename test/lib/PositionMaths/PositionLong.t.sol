@@ -5,10 +5,9 @@ pragma solidity 0.8.17;
 import "forge-std/Test.sol";
 import "src/lib/PositionMaths.sol";
 import "test/setup/Constants.sol";
+import "test/setup/WithPositionMaths.t.sol";
 
-contract LongPositionTest is Test {
-    Position position;
-
+contract LongPositionTest is Test, WithPositionMaths {
     using PositionMaths for Position;
 
     function setUp() public {
@@ -20,11 +19,12 @@ contract LongPositionTest is Test {
             lastBorrowFeeAmount: 0,
             pastFundingFeeIntegral: 0,
             lastFundingFeeAmount: 0,
+            collectedFundingFeeAmount: 0,
+            collectedBorrowFeeAmount: 0,
             lastFeeCalculationAt: uint48(block.timestamp),
             openedAt: uint48(block.timestamp),
             isShort: IS_SHORT_0,
             owner: msg.sender,
-            assetDecimals: ASSET_DECIMALS,
             lastAlterationBlock: uint40(block.number)
         });
     }
@@ -39,10 +39,6 @@ contract LongPositionTest is Test {
 
     function testEntryLeverage() public {
         assertEq(position.entryLeverage(), LEVERAGE_0);
-    }
-
-    function testBankruptcyPrice() public {
-        assertEq(position.bankruptcyPrice(), PRICE_BANKRUPTCY_0);
     }
 
     function testCurrentVolume() public {
@@ -103,11 +99,12 @@ contract LongPositionTest is Test {
             0,
             0,
             0,
+            0,
+            0,
             uint48(block.timestamp),
             uint48(block.timestamp),
             IS_SHORT_0,
             msg.sender,
-            ASSET_DECIMALS,
             uint40(block.number)
         );
 

@@ -10,7 +10,7 @@ import "src/interfaces/IPriceFeedAdapter.sol";
 import "src/interfaces/IController.sol";
 import "src/trade-pair/TradePair.sol";
 import "src/liquidity-pools/LiquidityPool.sol";
-import "src/trade-manager/TradeManager.sol";
+import "src/trade-manager/TradeManagerOrders.sol";
 import "src/liquidity-pools/LiquidityPoolAdapter.sol";
 import "src/sys-controller/Controller.sol";
 import "src/user-manager/UserManager.sol";
@@ -22,11 +22,12 @@ import "test/mocks/MockFeeManager.sol";
 import "test/mocks/MockLiquidityPoolAdapter.sol";
 import "test/mocks/MockUnlimitedOwner.sol";
 import "../../src/sys-controller/Controller.sol";
+import "./WithAlterationHelpers.t.sol";
 
 /**
  * @notice Test fixtures help to simulate specific scenarios in test cases
  */
-contract WithFixtures is Test {
+contract WithFixtures is Test, WithAlterationHelpers {
     using PositionMaths for Position;
 
     MockToken asset;
@@ -36,7 +37,7 @@ contract WithFixtures is Test {
     IPriceFeed collateralPriceFeed;
     MockV3Aggregator assetAggregator;
     MockV3Aggregator collateralAggregator;
-    TradeManager tradeManager;
+    TradeManagerOrders tradeManager;
     Controller controller;
     TradePair tradePair;
     MockPriceFeedAdapter priceFeedAdapter;
@@ -66,7 +67,7 @@ contract WithFixtures is Test {
 
         userManager.initialize(feeSizes, volumes);
 
-        tradeManager = new TradeManager(controller, userManager);
+        tradeManager = new TradeManagerOrders(controller, userManager);
     }
 
     function deployTokens() public {
@@ -95,9 +96,7 @@ contract WithFixtures is Test {
             feeManager
         );
 
-        tradePair.initialize(
-            "Shit Coin Trade Pair", collateral, ASSET_DECIMALS, priceFeedAdapter, mockLiquidityPoolAdapter
-        );
+        tradePair.initialize("Shit Coin Trade Pair", collateral, priceFeedAdapter, mockLiquidityPoolAdapter);
 
         tradePair.setLiquidatorReward(LIQUIDATOR_REWARD);
         tradePair.setMinLeverage(MIN_LEVERAGE);
@@ -107,7 +106,7 @@ contract WithFixtures is Test {
         tradePair.setBorrowFeeRate(BASIS_BORROW_FEE_0);
         tradePair.setMaxFundingFeeRate(FUNDING_FEE_0);
         tradePair.setMaxExcessRatio(MAX_EXCESS_RATIO);
-        tradePair.setTotalSizeLimit(TOTAL_ASSET_AMOUNT_LIMIT);
+        tradePair.setTotalVolumeLimit(TOTAL_VOLUME_LIMIT);
 
         controller.addLiquidityPoolAdapter(address(mockLiquidityPoolAdapter));
         controller.addTradePair(address(tradePair));

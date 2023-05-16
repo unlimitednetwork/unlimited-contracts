@@ -95,6 +95,9 @@ contract LiquidityPool is ILiquidityPool, UnlimitedOwnable, Initializable, Liqui
     /// @notice Mapping of UserPoolInfo for each user for each pool. userPoolInfo[poolId][user]
     mapping(uint256 => mapping(address => UserPoolInfo)) public userPoolInfo;
 
+    // Storage gap
+    uint256[50] ___gap;
+
     /* ========== CONSTRUCTOR ========== */
 
     /**
@@ -165,7 +168,7 @@ contract LiquidityPool is ILiquidityPool, UnlimitedOwnable, Initializable, Liqui
     function previewPoolsOf(address user_) external view returns (UserPoolDetails[] memory userPools) {
         userPools = new UserPoolDetails[](pools.length);
 
-        for (uint256 i = 0; i < pools.length; i++) {
+        for (uint256 i = 0; i < pools.length; ++i) {
             userPools[i] = previewPoolOf(user_, i);
         }
     }
@@ -359,8 +362,14 @@ contract LiquidityPool is ILiquidityPool, UnlimitedOwnable, Initializable, Liqui
         uint256 assets = previewRedeem(shares);
 
         require(assets >= minOut, "LiquidityPool::_withdrawShares: Bad slippage");
+
         // When user withdraws before earlyWithdrawalPeriod is over, they will be charged a fee
-        assets -= userWithdrawalFee(receiver) * assets / FULL_PERCENT;
+        uint256 feeAmount = userWithdrawalFee(receiver) * assets / FULL_PERCENT;
+        if (feeAmount > 0) {
+            assets -= feeAmount;
+            emit CollectedEarlyWithdrawalFee(user, feeAmount);
+        }
+
         _withdraw(user, receiver, user, assets, shares);
 
         return assets;
@@ -517,7 +526,7 @@ contract LiquidityPool is ILiquidityPool, UnlimitedOwnable, Initializable, Liqui
             _mint(address(this), newShares);
 
             uint256 newPoolLpsLeft = newShares;
-            for (uint256 i; i < multipliedPoolValues.length - 1; i++) {
+            for (uint256 i; i < multipliedPoolValues.length - 1; ++i) {
                 uint256 newPoolLps = newShares * multipliedPoolValues[i] / totalMultipliedValues;
                 newPoolLpsLeft -= newPoolLps;
                 pools[i].amount += newPoolLps;
@@ -552,7 +561,7 @@ contract LiquidityPool is ILiquidityPool, UnlimitedOwnable, Initializable, Liqui
     {
         multipliedPoolValues = new uint256[](pools.length);
 
-        for (uint256 i; i < multipliedPoolValues.length; i++) {
+        for (uint256 i; i < multipliedPoolValues.length; ++i) {
             uint256 multiplier = pools[i].multiplier;
             if (multiplier > 0) {
                 multipliedPoolValues[i] = pools[i].amount * multiplier;

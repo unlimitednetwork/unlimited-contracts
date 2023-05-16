@@ -11,6 +11,7 @@ import "../interfaces/IPriceFeedAdapter.sol";
 import "../interfaces/ITradeManager.sol";
 import "../interfaces/ITradePair.sol";
 import "../interfaces/IUserManager.sol";
+import "../shared/ArbitrumBlockchainInfo.sol";
 import "../shared/Constants.sol";
 import "../shared/UnlimitedOwnable.sol";
 import "../lib/FeeBuffer.sol";
@@ -18,7 +19,7 @@ import "../lib/FeeIntegral.sol";
 import "../lib/PositionMaths.sol";
 import "../lib/PositionStats.sol";
 
-contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
+contract TradePair is ITradePair, ArbitrumBlockchainInfo, UnlimitedOwnable, Initializable {
     using SafeERC20 for IERC20;
     using FeeIntegralLib for FeeIntegral;
     using FeeBufferLib for FeeBuffer;
@@ -30,8 +31,8 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
     uint256 private constant SURPLUS_MULTIPLIER = 1_000_000; // 1e6
     uint256 private constant BPS_MULTIPLIER = 100_00; // 1e4
 
-    uint256 private constant MIN_LEVERAGE = 11 * LEVERAGE_MULTIPLIER / 10;
-    uint256 private constant MAX_LEVERAGE = 100 * LEVERAGE_MULTIPLIER;
+    uint128 private constant MIN_LEVERAGE = 11 * uint128(LEVERAGE_MULTIPLIER) / 10;
+    uint128 private constant MAX_LEVERAGE = 100 * uint128(LEVERAGE_MULTIPLIER);
 
     uint256 private constant USD_TRIM = 10 ** 8;
 
@@ -73,8 +74,8 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
     /// @notice The name of this trade pair
     string public name;
 
-    /// @notice Decimals of the asset
-    uint256 public assetDecimals;
+    /// @notice Multiplier from collateral to price
+    uint256 private _collateralToPriceMultiplier;
 
     /* ============ INTERNAL SETTINGS ========== */
 
@@ -90,17 +91,8 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
     /// @notice Maximum Volume a position can have
     uint256 public volumeLimit;
 
-    /// @notice Limit for the total size of all positions
-    uint256 public totalSizeLimit;
-
-    /// @notice Fee to hold a loan for one hour in relative terms
-    uint256 public baseFundingFee = 100_000_000_000; // 0.1% (/FEE_MULTIPLIER)
-
-    /// @notice Maximum value of the surplus / balance fee
-    uint256 public maxSurplusFee = 100_000_000_000; // 0.1% (/FEE_MULTIPLIER)
-
-    /// @notice The Threshold of the long/short surplus at which the max surplus fee kicks in
-    uint256 public maxSurplus = 2_000_000; // (/SURPLUS_MULTIPLIER)
+    /// @notice Total volume limit for each side
+    uint256 public totalVolumeLimit;
 
     /// @notice reward for liquidator
     uint256 public liquidatorReward;
@@ -114,11 +106,8 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
     /// @dev White label recieves part of the open and close position fees collected
     mapping(uint256 => address) public positionIdToWhiteLabel;
 
-    /// @notice position ids of each user
-    mapping(address => uint256[]) public userToPositionIds;
-
     /// @notice increasing counter for the next position id
-    uint256 public nextId = 0;
+    uint256 public nextId;
 
     /// @notice Keeps track of total amounts of positions
     PositionStats public positionStats;
@@ -131,6 +120,9 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
 
     /// @notice Amount of overcollected fees
     int256 public overcollectedFees;
+
+    // Storage gap
+    uint256[50] __gap;
 
     /* ========== CONSTRUCTOR ========== */
 
@@ -156,22 +148,23 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
      * @notice Initializes state variables
      * @param name_ The name of this trade pair
      * @param collateral_ the collateral ERC20 contract
-     * @param assetDecimals_ the decimals of the asset
      * @param priceFeedAdapter_ The price feed adapter
      * @param liquidityPoolAdapter_ The liquidity pool adapter
      */
     function initialize(
         string calldata name_,
         IERC20Metadata collateral_,
-        uint256 assetDecimals_,
         IPriceFeedAdapter priceFeedAdapter_,
         ILiquidityPoolAdapter liquidityPoolAdapter_
     ) external onlyOwner initializer {
         name = name_;
         collateral = collateral_;
-        assetDecimals = assetDecimals_;
-        priceFeedAdapter = priceFeedAdapter_;
         liquidityPoolAdapter = liquidityPoolAdapter_;
+
+        setPriceFeedAdapter(priceFeedAdapter_);
+
+        minLeverage = MIN_LEVERAGE;
+        maxLeverage = MAX_LEVERAGE;
     }
 
     /* ========== CORE FUNCTIONS - POSITIONS ========== */
@@ -188,7 +181,7 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
         verifyLeverage(leverage_)
         onlyTradeManager
         syncFeesBefore
-        checkSizeLimitAfter
+        checkTotalVolumeLimit
         returns (uint256)
     {
         if (whitelabelAddress != address(0)) {
@@ -233,17 +226,18 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
             lastBorrowFeeAmount: 0,
             pastFundingFeeIntegral: currentFundingFeeIntegral,
             lastFundingFeeAmount: 0,
+            collectedFundingFeeAmount: 0,
+            collectedBorrowFeeAmount: 0,
             lastFeeCalculationAt: uint48(block.timestamp),
             openedAt: uint48(block.timestamp),
             isShort: isShort_,
             owner: maker_,
-            assetDecimals: uint16(assetDecimals),
-            lastAlterationBlock: uint40(block.number)
+            lastAlterationBlock: uint40(_getBlockNumber())
         });
 
-        userToPositionIds[maker_].push(id);
-
         positionStats.addTotalCount(margin_, volume, assetAmount, isShort_);
+
+        _verifyPositionsValidity(id);
 
         emit OpenedPosition(maker_, id, margin_, volume, assetAmount, isShort_);
 
@@ -262,6 +256,7 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
         syncFeesBefore
     {
         _verifyAndUpdateLastAlterationBlock(positionId_);
+        _verifyPositionsValidity(positionId_);
         _closePosition(positionId_);
     }
 
@@ -290,15 +285,23 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
         }
 
         if (payoutToMaker > 0) {
-            _payoutToMaker(position.owner, int256(payoutToMaker), positionId_);
+            _payoutToMaker(position.owner, int256(payoutToMaker), position.volume, positionId_);
         }
 
-        emit RealizedPnL(position.owner, positionId_, _getCurrentNetPnL(position));
+        (int256 currentBorrowFeeIntegral, int256 currentFundingFeeIntegral) = _getCurrentFeeIntegrals(position.isShort);
+
+        emit RealizedPnL(
+            position.owner,
+            positionId_,
+            _getCurrentNetPnL(position),
+            position.currentBorrowFeeAmount(currentBorrowFeeIntegral),
+            position.currentFundingFeeAmount(currentFundingFeeIntegral)
+        );
 
         emit ClosedPosition(positionId_, _getCurrentPrice(position.isShort, true));
 
         // Finally delete position
-        _deletePosition(positionId_);
+        delete positions[positionId_];
     }
 
     /**
@@ -331,7 +334,11 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
         positionDelta.margin = position.margin;
         positionDelta.volume = position.volume;
         positionDelta.assetAmount = position.assetAmount;
-        positionDelta.PnL = _getCurrentNetPnL(position);
+        int256 realizedPnL = _getCurrentNetPnL(position);
+
+        (int256 currentBorrowFeeIntegral, int256 currentFundingFeeIntegral) = _getCurrentFeeIntegrals(position.isShort);
+        int256 realizedBorrowFeeAmount = position.currentBorrowFeeAmount(currentBorrowFeeIntegral);
+        int256 realizedFundingFeeAmount = position.currentFundingFeeAmount(currentFundingFeeIntegral);
 
         // partially close in storage
         payoutToMaker = position.partiallyClose(_getCurrentPrice(position.isShort, true), proportion_);
@@ -340,16 +347,18 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
         positionDelta.margin -= position.margin;
         positionDelta.volume -= position.volume;
         positionDelta.assetAmount -= position.assetAmount;
-        positionDelta.PnL -= _getCurrentNetPnL(position);
+        realizedPnL -= _getCurrentNetPnL(position);
+        realizedBorrowFeeAmount -= position.lastBorrowFeeAmount;
+        realizedFundingFeeAmount -= position.lastFundingFeeAmount;
 
-        uint256 payout = _registerProtocolPnL(-positionDelta.PnL);
+        uint256 payout = _registerProtocolPnL(-realizedPnL);
 
         if (payoutToMaker > int256(payout + positionDelta.margin)) {
             payoutToMaker = int256(payout + positionDelta.margin);
         }
 
         if (payoutToMaker > 0) {
-            _payoutToMaker(maker_, int256(payoutToMaker), positionId_);
+            _payoutToMaker(maker_, int256(payoutToMaker), positionDelta.volume, positionId_);
         }
 
         // Use positionDelta to update positionStats
@@ -363,9 +372,9 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
             position.lastNetMargin(),
             position.volume,
             position.assetAmount
-            );
+        );
 
-        emit RealizedPnL(maker_, positionId_, positionDelta.PnL);
+        emit RealizedPnL(maker_, positionId_, realizedPnL, realizedBorrowFeeAmount, realizedFundingFeeAmount);
     }
 
     /**
@@ -384,7 +393,7 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
         syncFeesBefore
         updatePositionFees(positionId_)
         onlyValidAlteration(positionId_)
-        checkSizeLimitAfter
+        checkTotalVolumeLimit
     {
         _extendPosition(maker_, positionId_, addedMargin_, addedLeverage_);
     }
@@ -418,7 +427,7 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
 
         emit AlteredPosition(
             PositionAlterationType.extend, positionId_, position.lastNetMargin(), position.volume, position.assetAmount
-            );
+        );
     }
 
     /**
@@ -435,7 +444,7 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
         updatePositionFees(positionId_)
         onlyValidAlteration(positionId_)
         verifyLeverage(targetLeverage_)
-        checkSizeLimitAfter
+        checkTotalVolumeLimit
     {
         _extendPositionToLeverage(positionId_, targetLeverage_);
     }
@@ -470,7 +479,7 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
             position.lastNetMargin(),
             position.volume,
             position.assetAmount
-            );
+        );
     }
 
     /**
@@ -496,10 +505,16 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
         // update position in storage
         position.removeMargin(removedMargin_);
 
+        // The minMargin condition has to hold after the margin is removed
+        require(
+            position.lastNetMargin() >= minMargin,
+            "TradePair::_removeMarginFromPosition: Margin must be above minMargin"
+        );
+
         // update aggregated values
         positionStats.removeTotalCount(removedMargin_, 0, 0, position.isShort);
 
-        _payoutToMaker(maker_, int256(removedMargin_), positionId_);
+        _payoutToMaker(maker_, int256(removedMargin_), 0, positionId_);
 
         emit AlteredPosition(
             PositionAlterationType.removeMargin,
@@ -507,7 +522,7 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
             position.lastNetMargin(),
             position.volume,
             position.assetAmount
-            );
+        );
     }
 
     /**
@@ -537,6 +552,13 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
 
         // change position in storage
         position.addMargin(addedMargin_);
+
+        // The maxLeverage condition has to hold
+        require(
+            position.lastNetLeverage() >= minLeverage,
+            "TradePair::_addMarginToPosition: Leverage must be above minLeverage"
+        );
+
         // update aggregated values
         positionStats.addTotalCount(addedMargin_, 0, 0, position.isShort);
 
@@ -546,7 +568,7 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
             position.lastNetMargin(),
             position.volume,
             position.assetAmount
-            );
+        );
     }
 
     /**
@@ -607,10 +629,10 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
 
         // Prio 3: Pay out to the maker
         if (availableLiquidity > payoutToMaker) {
-            _payoutToMaker(position.owner, int256(payoutToMaker), positionId_);
+            _payoutToMaker(position.owner, int256(payoutToMaker), position.volume, positionId_);
             availableLiquidity -= payoutToMaker;
         } else {
-            _payoutToMaker(position.owner, int256(availableLiquidity), positionId_);
+            _payoutToMaker(position.owner, int256(availableLiquidity), position.volume, positionId_);
             availableLiquidity = 0;
         }
 
@@ -627,12 +649,20 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
         // Remove position from total counts
         positionStats.removeTotalCount(position.margin, position.volume, position.assetAmount, position.isShort);
 
-        emit RealizedPnL(position.owner, positionId_, _getCurrentNetPnL(position));
+        (int256 currentBorrowFeeIntegral, int256 currentFundingFeeIntegral) = _getCurrentFeeIntegrals(position.isShort);
+
+        emit RealizedPnL(
+            position.owner,
+            positionId_,
+            _getCurrentNetPnL(position),
+            position.currentBorrowFeeAmount(currentBorrowFeeIntegral),
+            position.currentFundingFeeAmount(currentFundingFeeIntegral)
+        );
 
         emit LiquidatedPosition(positionId_, liquidator_);
 
         // Delete Position
-        _deletePosition(positionId_);
+        delete positions[positionId_];
     }
 
     /* ========== HELPER FUNCTIONS ========= */
@@ -648,14 +678,20 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
         // The total amount of borrow fee is based on the entry volume of all positions
         // This is done to batch collect borrow fees for all open positions
 
-        int256 elapsedBorrowFeeIntegral = feeIntegral.getElapsedBorrowFeeIntegral();
+        uint256 timeSinceLastUpdate = block.timestamp - feeIntegral.lastUpdatedAt;
 
-        if (elapsedBorrowFeeIntegral > 0) {
+        if (timeSinceLastUpdate > 0) {
+            int256 elapsedBorrowFeeIntegral = feeIntegral.getElapsedBorrowFeeIntegral();
             uint256 totalVolume = positionStats.totalShortVolume + positionStats.totalLongVolume;
 
             int256 newBorrowFeeAmount = elapsedBorrowFeeIntegral * int256(totalVolume) / FEE_MULTIPLIER;
+
             // Fee Integrals get updated for funding fee.
             feeIntegral.update(positionStats.totalLongAssetAmount, positionStats.totalShortAssetAmount);
+
+            emit UpdatedFeeIntegrals(
+                feeIntegral.borrowFeeIntegral, feeIntegral.longFundingFeeIntegral, feeIntegral.shortFundingFeeIntegral
+            );
 
             // Reduce by the fee buffer
             // Buffer is used to prevent overrtaking the fees from the position
@@ -664,22 +700,6 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
             // Transfer borrow fee to FeeManager
             _depositBorrowFees(reducedFeeAmount);
         }
-    }
-
-    /**
-     * @dev Deletes position entries from storage.
-     */
-    function _deletePosition(uint256 positionId_) internal {
-        address maker = positions[positionId_].owner;
-        uint256[] storage makerPositions = userToPositionIds[maker];
-        for (uint256 i = 0; i < makerPositions.length; i++) {
-            if (makerPositions[i] == positionId_) {
-                makerPositions[i] = makerPositions[makerPositions.length - 1];
-                makerPositions.pop();
-                break;
-            }
-        }
-        delete positions[positionId_];
     }
 
     /**
@@ -701,8 +721,9 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
         // Clear Buffer
         return feeBuffer.clearBuffer(
             position_.margin,
-            position_.currentBorrowFeeAmount(currentBorrowFeeIntegral),
-            position_.currentFundingFeeAmount(currentFundingFeeIntegral) + int256(additionalFee)
+            position_.currentBorrowFeeAmount(currentBorrowFeeIntegral) + position_.collectedBorrowFeeAmount,
+            position_.currentFundingFeeAmount(currentFundingFeeIntegral) + position_.collectedFundingFeeAmount
+                + int256(additionalFee)
         );
     }
 
@@ -711,10 +732,14 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
      * @param positionId_ the id of the position
      */
     function _updatePositionFees(uint256 positionId_) internal {
-        (int256 currentBorrowFeeIntegral, int256 currentFundingFeeIntegral) =
-            _getCurrentFeeIntegrals(positions[positionId_].isShort);
+        Position storage position = positions[positionId_];
+        (int256 currentBorrowFeeIntegral, int256 currentFundingFeeIntegral) = _getCurrentFeeIntegrals(position.isShort);
 
-        positions[positionId_].updateFees(currentBorrowFeeIntegral, currentFundingFeeIntegral);
+        position.updateFees(currentBorrowFeeIntegral, currentFundingFeeIntegral);
+
+        emit UpdatedFeesOfPosition(
+            positionId_, position.lastBorrowFeeAmount + position.lastFundingFeeAmount, position.lastNetMargin()
+        );
     }
 
     /**
@@ -732,6 +757,8 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
             payout = liquidityPoolAdapter.requestLossPayout(uint256(-protocolPnL_));
         }
         // if PnL == 0, nothing happens
+
+        emit RegisteredProtocolPnL(protocolPnL_, payout);
     }
 
     /**
@@ -749,14 +776,17 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
     /**
      * @dev Deducts fees from the given amount and pays the rest to maker
      */
-    function _payoutToMaker(address maker_, int256 amount_, uint256 positionId_) private {
+    function _payoutToMaker(address maker_, int256 amount_, uint256 closedVolume, uint256 positionId_) private {
         if (amount_ > 0) {
-            uint256 closePositionFee = feeManager.calculateUserCloseFeeAmount(maker_, uint256(amount_));
+            uint256 closePositionFee = feeManager.calculateUserCloseFeeAmount(maker_, closedVolume);
             _depositClosePositionFees(maker_, closePositionFee, positionId_);
 
-            uint256 reducedAmount = uint256(amount_) - closePositionFee;
+            uint256 reducedAmount;
+            if (uint256(amount_) > closePositionFee) {
+                reducedAmount = uint256(amount_) - closePositionFee;
+            }
 
-            collateral.safeTransfer(maker_, reducedAmount);
+            _payOut(maker_, reducedAmount);
 
             emit PayedOutCollateral(maker_, reducedAmount, positionId_);
         }
@@ -824,6 +854,8 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
     function _depositOpenPositionFees(address user_, uint256 amount_, uint256 positionId_) private {
         _resetApprove(address(feeManager), amount_);
         feeManager.depositOpenFees(user_, address(collateral), amount_, positionIdToWhiteLabel[positionId_]);
+
+        emit DepositedOpenFees(user_, amount_, positionId_);
     }
 
     /**
@@ -832,6 +864,8 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
     function _depositClosePositionFees(address user_, uint256 amount_, uint256 positionId_) private {
         _resetApprove(address(feeManager), amount_);
         feeManager.depositCloseFees(user_, address(collateral), amount_, positionIdToWhiteLabel[positionId_]);
+
+        emit DepositedCloseFees(user_, amount_, positionId_);
     }
 
     /**
@@ -842,6 +876,8 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
             _resetApprove(address(feeManager), amount_);
             feeManager.depositBorrowFees(address(collateral), amount_);
         }
+
+        emit DepositedBorrowFees(amount_);
     }
 
     /**
@@ -856,6 +892,15 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
     }
 
     /* ========== EXTERNAL VIEW FUNCTIONS ========== */
+
+    /**
+     * @notice Multiplier from collateral to price.
+     * @return collateralToPriceMultiplier
+     */
+    function collateralToPriceMultiplier() external view returns (uint256) {
+        return _collateralToPriceMultiplier;
+    }
+
     /**
      * @notice Calculates the current funding fee rates
      * @return longFundingFeeRate long funding fee rate
@@ -872,15 +917,6 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
     }
 
     /**
-     * @notice Returns positionIds of a user/maker
-     * @param maker_ Address of maker
-     * @return positionIds of maker
-     */
-    function positionIdsOf(address maker_) external view returns (uint256[] memory) {
-        return userToPositionIds[maker_];
-    }
-
-    /**
      * @notice returns the details of a position
      * @dev returns PositionDetails
      */
@@ -891,6 +927,9 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
         // Fee integrals
         (int256 currentBorrowFeeIntegral, int256 currentFundingFeeIntegral) = _getCurrentFeeIntegrals(position.isShort);
 
+        uint256 maintenanceMargin =
+            absoluteMaintenanceMargin() + feeManager.calculateUserCloseFeeAmount(position.owner, position.volume);
+
         // Construnct position info
         PositionDetails memory positionDetails;
         positionDetails.id = positionId_;
@@ -898,19 +937,12 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
         positionDetails.volume = position.volume;
         positionDetails.assetAmount = position.assetAmount;
         positionDetails.isShort = position.isShort;
-        int256 currentPrice = _getCurrentPrice(position.isShort, true);
         positionDetails.leverage = position.currentNetLeverage(currentBorrowFeeIntegral, currentFundingFeeIntegral);
-        positionDetails.volume = position.volume;
-        positionDetails.currentVolume =
-            position.currentValue(currentPrice) > 0 ? uint256(position.currentValue(currentPrice)) : 0;
         positionDetails.entryPrice = position.entryPrice();
-        positionDetails.markPrice = currentPrice;
-        positionDetails.bankruptcyPrice = position.bankruptcyPrice();
-        positionDetails.totalFeeAmount =
-            position.currentTotalFeeAmount(currentBorrowFeeIntegral, currentFundingFeeIntegral);
-        positionDetails.PnL = position.currentNetPnL(currentPrice, currentBorrowFeeIntegral, currentFundingFeeIntegral);
-        positionDetails.equity =
-            position.currentNetEquity(currentPrice, currentBorrowFeeIntegral, currentFundingFeeIntegral);
+        positionDetails.liquidationPrice =
+            position.liquidationPrice(currentBorrowFeeIntegral, currentFundingFeeIntegral, maintenanceMargin);
+        positionDetails.currentBorrowFeeAmount = position.currentBorrowFeeAmount(currentBorrowFeeIntegral);
+        positionDetails.currentFundingFeeAmount = position.currentFundingFeeAmount(currentFundingFeeIntegral);
         return positionDetails;
     }
 
@@ -920,6 +952,23 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
      */
     function positionIsLiquidatable(uint256 positionId_) external view returns (bool) {
         return _positionIsLiquidatable(positionId_);
+    }
+
+    /**
+     * @notice Simulates if a position is liquidatable at a given price. Meant to be used by external liquidation services.
+     * @param positionId_ the position id
+     * @param price_ the price to simulate
+     */
+    function positionIsLiquidatableAtPrice(uint256 positionId_, int256 price_) external view returns (bool) {
+        Position storage position = positions[positionId_];
+        require(position.exists(), "TradePair::positionIsLiquidatableAtPrice: position does not exist");
+        (int256 currentBorrowFeeIntegral, int256 currentFundingFeeIntegral) = _getCurrentFeeIntegrals(position.isShort);
+
+        // Maintenance margin is the absolute maintenance margin plus the fee for closing the position
+        uint256 maintenanceMargin =
+            absoluteMaintenanceMargin() + feeManager.calculateUserCloseFeeAmount(position.owner, position.volume);
+
+        return position.isLiquidatable(price_, currentBorrowFeeIntegral, currentFundingFeeIntegral, maintenanceMargin);
     }
 
     /**
@@ -955,6 +1004,8 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
      */
     function setBorrowFeeRate(int256 borrowFeeRate_) public onlyOwner syncFeesBefore {
         feeIntegral.borrowFeeRate = int256(borrowFeeRate_);
+
+        emit SetBorrowFeeRate(borrowFeeRate_);
     }
 
     /**
@@ -963,6 +1014,8 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
      */
     function setMaxFundingFeeRate(int256 maxFundingFeeRate_) public onlyOwner syncFeesBefore {
         feeIntegral.fundingFeeRate = maxFundingFeeRate_;
+
+        emit SetMaxFundingFeeRate(maxFundingFeeRate_);
     }
 
     /**
@@ -971,6 +1024,8 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
      */
     function setMaxExcessRatio(int256 maxExcessRatio_) public onlyOwner syncFeesBefore {
         feeIntegral.maxExcessRatio = maxExcessRatio_;
+
+        emit SetMaxExcessRatio(maxExcessRatio_);
     }
 
     /**
@@ -979,6 +1034,8 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
      */
     function setLiquidatorReward(uint256 liquidatorReward_) public onlyOwner {
         liquidatorReward = liquidatorReward_;
+
+        emit SetLiquidatorReward(liquidatorReward_);
     }
 
     /**
@@ -988,6 +1045,8 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
     function setMinLeverage(uint128 minLeverage_) public onlyOwner {
         require(minLeverage_ >= MIN_LEVERAGE, "TradePair::setMinLeverage: Leverage too small");
         minLeverage = minLeverage_;
+
+        emit SetMinLeverage(minLeverage_);
     }
 
     /**
@@ -997,6 +1056,8 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
     function setMaxLeverage(uint128 maxLeverage_) public onlyOwner {
         require(maxLeverage_ <= MAX_LEVERAGE, "TradePair::setMaxLeverage: Leverage to high");
         maxLeverage = maxLeverage_;
+
+        emit SetMaxLeverage(maxLeverage_);
     }
 
     /**
@@ -1005,6 +1066,8 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
      */
     function setMinMargin(uint256 minMargin_) public onlyOwner {
         minMargin = minMargin_;
+
+        emit SetMinMargin(minMargin_);
     }
 
     /**
@@ -1013,6 +1076,8 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
      */
     function setVolumeLimit(uint256 volumeLimit_) public onlyOwner {
         volumeLimit = volumeLimit_;
+
+        emit SetVolumeLimit(volumeLimit_);
     }
 
     /**
@@ -1021,14 +1086,34 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
      */
     function setFeeBufferFactor(int256 feeBufferFactor_) public onlyOwner syncFeesBefore {
         feeBuffer.bufferFactor = feeBufferFactor_;
+
+        emit SetFeeBufferFactor(feeBufferFactor_);
     }
 
     /**
-     * @notice Sets the limit for the total size of all positions
-     * @param totalSizeLimit_ limit for the total size of all positions
+     * @notice Sets the total volume limit for both long and short positions
+     * @param totalVolumeLimit_ total volume limit
      */
-    function setTotalSizeLimit(uint256 totalSizeLimit_) public onlyOwner {
-        totalSizeLimit = totalSizeLimit_;
+    function setTotalVolumeLimit(uint256 totalVolumeLimit_) public onlyOwner {
+        totalVolumeLimit = totalVolumeLimit_;
+        emit SetTotalVolumeLimit(totalVolumeLimit_);
+    }
+
+    /**
+     * @notice Sets the price feed adapter
+     * @param priceFeedAdapter_ IPriceFeedAdapter
+     * @dev PriceFeedAdapter checks that asset and collateral decimals are less or equal than price decimals,
+     * So they can be savely used here.
+     */
+    function setPriceFeedAdapter(IPriceFeedAdapter priceFeedAdapter_) public onlyOwner {
+        // Set Decimals
+
+        // Calculate Multipliers
+        _collateralToPriceMultiplier = PRICE_MULTIPLIER / (10 ** priceFeedAdapter_.collateralDecimals());
+
+        // Set PriceFeedAdapter
+        priceFeedAdapter = priceFeedAdapter_;
+        emit SetPriceFeedAdapter(address(priceFeedAdapter_));
     }
 
     /* ========== INTERNAL VIEW FUNCTIONS ========== */
@@ -1086,11 +1171,15 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
         require(position.exists(), "TradePair::_positionIsLiquidatable: position does not exist");
         (int256 currentBorrowFeeIntegral, int256 currentFundingFeeIntegral) = _getCurrentFeeIntegrals(position.isShort);
 
+        // Maintenance margin is the absolute maintenance margin plus the fee for closing the position
+        uint256 maintenanceMargin =
+            absoluteMaintenanceMargin() + feeManager.calculateUserCloseFeeAmount(position.owner, position.volume);
+
         return position.isLiquidatable(
             _getCurrentPrice(position.isShort, true),
             currentBorrowFeeIntegral,
             currentFundingFeeIntegral,
-            absoluteMaintenanceMargin()
+            maintenanceMargin
         );
     }
 
@@ -1121,12 +1210,16 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
     }
 
     /**
-     * @dev Reverts when the total size limit is reached by the sum of either all long or all short position
+     * @dev Reverts when either long or short positions extend the total volume limit
      */
-    function _checkSizeLimit() private view {
+    function _checkTotalVolumeLimitAfter() private view {
         require(
-            positionStats.totalLongAssetAmount + positionStats.totalShortAssetAmount <= totalSizeLimit,
-            "TradePair::_checkSizeLimit: size limit reached"
+            positionStats.totalLongVolume <= totalVolumeLimit,
+            "TradePair::_checkTotalVolumeLimitAfter: total volume limit reached by long positions"
+        );
+        require(
+            positionStats.totalShortVolume <= totalVolumeLimit,
+            "TradePair::_checkTotalVolumeLimitAfter: total volume limit reached by short positions"
         );
     }
 
@@ -1136,10 +1229,10 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
      */
     function _verifyAndUpdateLastAlterationBlock(uint256 positionId_) private {
         require(
-            positions[positionId_].lastAlterationBlock < block.number,
+            positions[positionId_].lastAlterationBlock < _getBlockNumber(),
             "TradePair::_verifyAndUpdateLastAlterationBlock: position already altered this block"
         );
-        positions[positionId_].lastAlterationBlock = uint40(block.number);
+        positions[positionId_].lastAlterationBlock = uint40(_getBlockNumber());
     }
 
     /**
@@ -1148,18 +1241,21 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
      * - The position must exists
      * - The position must not be liquidatable
      * - The position must not reach the volume limit
+     * - The position must not reach the leverage limits
      */
     function _verifyPositionsValidity(uint256 positionId_) private view {
+        Position storage _position = positions[positionId_];
+
         // Position must exist
-        require(positions[positionId_].exists(), "TradePair::_verifyPositionsValidity: position does not exist");
+        require(_position.exists(), "TradePair::_verifyPositionsValidity: position does not exist");
 
         // Position must not be liquidatable
         {
             (int256 currentBorrowFeeIntegral, int256 currentFundingFeeIntegral) =
-                _getCurrentFeeIntegrals(positions[positionId_].isShort);
+                _getCurrentFeeIntegrals(_position.isShort);
             require(
-                !positions[positionId_].isLiquidatable(
-                    _getCurrentPrice(positions[positionId_].isShort, true),
+                !_position.isLiquidatable(
+                    _getCurrentPrice(_position.isShort, true),
                     currentBorrowFeeIntegral,
                     currentFundingFeeIntegral,
                     absoluteMaintenanceMargin()
@@ -1171,18 +1267,23 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
         // Position must not reach the volume limit
         {
             require(
-                positions[positionId_].currentVolume(_getCurrentPrice(positions[positionId_].isShort, false))
-                    <= volumeLimit,
+                _position.currentVolume(_getCurrentPrice(_position.isShort, false)) <= volumeLimit,
                 "TradePair_verifyPositionsValidity: Borrow limit reached"
             );
         }
+
+        // The position must not reach the leverage limits
+        _verifyLeverage(_position.lastNetLeverage());
     }
 
     /**
      * @dev Reverts when leverage is out of bounds
      */
     function _verifyLeverage(uint256 leverage_) private view {
-        require(leverage_ >= minLeverage, "TradePair::_verifyLeverage: leverage must be above or equal min leverage");
+        // We add/subtract 1 to the limits to account for rounding errors
+        require(
+            leverage_ >= minLeverage - 1, "TradePair::_verifyLeverage: leverage must be above or equal min leverage"
+        );
         require(leverage_ <= maxLeverage, "TradePair::_verifyLeverage: leverage must be under or equal max leverage");
     }
 
@@ -1218,11 +1319,11 @@ contract TradePair is ITradePair, UnlimitedOwnable, Initializable {
     }
 
     /**
-     * @dev Reverts when aggregated size reaches size limit after transaction
+     * @dev Reverts when aggregated size reaches asset amount limit after transaction
      */
-    modifier checkSizeLimitAfter() {
+    modifier checkTotalVolumeLimit() {
         _;
-        _checkSizeLimit();
+        _checkTotalVolumeLimitAfter();
     }
 
     /**

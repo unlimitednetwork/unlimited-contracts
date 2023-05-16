@@ -3,6 +3,7 @@
 pragma solidity 0.8.17;
 
 import "forge-std/Test.sol";
+import "lib/openzeppelin-contracts/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import "src/price-feed/ChainlinkUsdPriceFeed.sol";
 import "test/mocks/MockV3Aggregator.sol";
 import "../setup/WithMocks.t.sol";
@@ -14,10 +15,14 @@ contract LiquidityPoolTest is Test, WithMocks {
     LiquidityPool private liquidityPool;
 
     function setUp() public {
-        liquidityPool = new LiquidityPool(
+        ILiquidityPool liquidityPoolImplementation = new LiquidityPool(
             mockUnlimitedOwner,
             collateral,
             mockController
+        );
+
+        liquidityPool = LiquidityPool(
+            address(new TransparentUpgradeableProxy(address(liquidityPoolImplementation), address(1), ""))
         );
 
         vm.prank(UNLIMITED_OWNER);
@@ -161,10 +166,14 @@ contract LiquidityPoolTest is Test, WithMocks {
 
     function testMinimumAmount() public {
         // ARRANGE
-        liquidityPool = new LiquidityPool(
+        ILiquidityPool liquidityPoolImplementation = new LiquidityPool(
             mockUnlimitedOwner,
             collateral,
             mockController
+        );
+
+        liquidityPool = LiquidityPool(
+            address(new TransparentUpgradeableProxy(address(liquidityPoolImplementation), address(1), ""))
         );
 
         uint256 minimumAmount = 1000;
@@ -555,10 +564,14 @@ contract LiquidityPoolTest is Test, WithMocks {
     function testDefaultLockTime() public {
         // ARRANGE
         uint256 defaultlockTime = 1 hours;
-        liquidityPool = new LiquidityPool(
+        ILiquidityPool liquidityPoolImplementation = new LiquidityPool(
             mockUnlimitedOwner,
             collateral,
             mockController
+        );
+
+        liquidityPool = LiquidityPool(
+            address(new TransparentUpgradeableProxy(address(liquidityPoolImplementation), address(1), ""))
         );
 
         vm.prank(UNLIMITED_OWNER);
@@ -582,10 +595,14 @@ contract LiquidityPoolTest is Test, WithMocks {
     function testTransferAfterDeposit() public {
         // ARRANGE
         uint256 defaultlockTime = 1 hours;
-        liquidityPool = new LiquidityPool(
+        ILiquidityPool liquidityPoolImplementation = new LiquidityPool(
             mockUnlimitedOwner,
             collateral,
             mockController
+        );
+
+        liquidityPool = LiquidityPool(
+            address(new TransparentUpgradeableProxy(address(liquidityPoolImplementation), address(1), ""))
         );
 
         vm.prank(UNLIMITED_OWNER);
@@ -657,10 +674,14 @@ contract LiquidityPoolTest is Test, WithMocks {
 
     function testUserWithdrawalFee() public {
         // ARRANGE
-        liquidityPool = new LiquidityPool(
+        ILiquidityPool liquidityPoolImplementation = new LiquidityPool(
             mockUnlimitedOwner,
             collateral,
             mockController
+        );
+
+        liquidityPool = LiquidityPool(
+            address(new TransparentUpgradeableProxy(address(liquidityPoolImplementation), address(1), ""))
         );
 
         vm.prank(UNLIMITED_OWNER);
@@ -681,10 +702,14 @@ contract LiquidityPoolTest is Test, WithMocks {
     }
 
     function testUserWithdrawalFeeWithLocking() public {
-        liquidityPool = new LiquidityPool(
+        ILiquidityPool liquidityPoolImplementation = new LiquidityPool(
             mockUnlimitedOwner,
             collateral,
             mockController
+        );
+
+        liquidityPool = LiquidityPool(
+            address(new TransparentUpgradeableProxy(address(liquidityPoolImplementation), address(1), ""))
         );
 
         vm.prank(UNLIMITED_OWNER);
@@ -707,10 +732,14 @@ contract LiquidityPoolTest is Test, WithMocks {
     }
 
     function testEarlyWithdrawalMultipleTimes() public {
-        liquidityPool = new LiquidityPool(
+        ILiquidityPool liquidityPoolImplementation = new LiquidityPool(
             mockUnlimitedOwner,
             collateral,
             mockController
+        );
+
+        liquidityPool = LiquidityPool(
+            address(new TransparentUpgradeableProxy(address(liquidityPoolImplementation), address(1), ""))
         );
 
         vm.prank(UNLIMITED_OWNER);
@@ -864,6 +893,18 @@ contract LiquidityPoolTest is Test, WithMocks {
         assertEq(pools[0].unlockedShares, shares1, "unlockedShares");
         assertEq(pools[0].totalAssets, depositAmount * 2, "totalAssets");
         assertEq(pools[0].unlockedAssets, depositAmount, "unlockedAssets");
+    }
+
+    function test_AssetDecimalsCanNotExtend18() public {
+        uint8 decimals = 19;
+        collateral.setDecimals(decimals);
+
+        vm.expectRevert("LiquidityPoolVault::constructor: asset decimals must be <= 18");
+        liquidityPool = new LiquidityPool(
+            mockUnlimitedOwner,
+            collateral,
+            mockController
+        );
     }
 
     // =============================================================

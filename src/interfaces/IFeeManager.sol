@@ -5,9 +5,9 @@ pragma solidity ^0.8.0;
 interface IFeeManager {
     /* ========== EVENTS ============ */
 
-    event ReferrerFeesPaid(address indexed referrer, address indexed asset, uint256 amount);
+    event ReferrerFeesPaid(address indexed referrer, address indexed asset, uint256 amount, address user);
 
-    event WhiteLabelFeesPaid(address indexed whitelabel, address indexed asset, uint256 amount);
+    event WhiteLabelFeesPaid(address indexed whitelabel, address indexed asset, uint256 amount, address user);
 
     event UpdatedReferralFee(uint256 newReferrerFee);
 
@@ -26,7 +26,8 @@ interface IFeeManager {
         uint256 stakersFeeAmount,
         uint256 devFeeAmount,
         uint256 insuranceFundFeeAmount,
-        uint256 liquidityPoolFeeAmount
+        uint256 liquidityPoolFeeAmount,
+        address user
     );
 
     /* ========== CORE FUNCTIONS ========== */

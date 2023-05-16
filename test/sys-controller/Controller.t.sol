@@ -8,7 +8,7 @@ import "test/setup/Constants.sol";
 import "src/sys-controller/Controller.sol";
 
 contract ControllerTest is Test, WithMocks {
-    Controller controller;
+    IController controller;
 
     function setUp() public {
         controller = new Controller(mockUnlimitedOwner);
@@ -111,39 +111,69 @@ contract ControllerTest is Test, WithMocks {
 
     function testAddUpdatable() public {
         // ACT
-        controller.addUpdatable(address(10));
+        controller.addUpdatable(address(13));
 
         // ASSERT
-        assertTrue(controller.isUpdatable(address(10)));
+        assertTrue(controller.isUpdatable(address(13)));
     }
 
     function testRemoveUpdatable() public {
         // ARRANGE
-        controller.addUpdatable(address(10));
+        controller.addUpdatable(address(13));
 
         // ACT
-        controller.removeUpdatable(address(10));
+        controller.removeUpdatable(address(13));
 
         // ASSERT
-        assertFalse(controller.isUpdatable(address(10)));
+        assertFalse(controller.isUpdatable(address(13)));
     }
 
     function testAddSigner() public {
         // ACT
-        controller.addSigner(address(10));
+        controller.addSigner(address(14));
 
         // ASSERT
-        assertTrue(controller.isSigner(address(10)));
+        assertTrue(controller.isSigner(address(14)));
     }
 
     function testRemoveSigner() public {
         // ARRANGE
-        controller.addSigner(address(10));
+        controller.addSigner(address(14));
 
         // ACT
-        controller.removeSigner(address(10));
+        controller.removeSigner(address(14));
 
         // ASSERT
-        assertFalse(controller.isSigner(address(10)));
+        assertFalse(controller.isSigner(address(14)));
+    }
+
+    function testAddOrderExecutor() public {
+        // ACT
+        controller.addOrderExecutor(address(15));
+
+        // ASSERT
+        assertTrue(controller.isOrderExecutor(address(15)));
+    }
+
+    function testRemoveOrderExecutor() public {
+        // ARRANGE
+        controller.addOrderExecutor(address(15));
+
+        // ACT
+        controller.removeOrderExecutor(address(15));
+
+        // ASSERT
+        assertFalse(controller.isOrderExecutor(address(15)));
+    }
+
+    function testOrderRewardOfCollateral() public {
+        // ARRANGE
+        uint256 expected = 100;
+
+        // ACT
+        controller.setOrderRewardOfCollateral(address(collateral), expected);
+
+        // ASSERT
+        assertEq(controller.orderRewardOfCollateral(address(collateral)), expected);
     }
 }

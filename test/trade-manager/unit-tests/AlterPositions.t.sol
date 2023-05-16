@@ -5,7 +5,7 @@ pragma solidity 0.8.17;
 import "forge-std/Test.sol";
 import "src/interfaces/ITradePair.sol";
 import "src/lib/PositionMaths.sol";
-import "src/trade-manager/TradeManager.sol";
+import "./../TradeManagerHarness.t.sol";
 import "test/mocks/MockTradePair.sol";
 import "test/mocks/MockUserManager.sol";
 import "test/mocks/MockController.sol";
@@ -13,12 +13,12 @@ import "test/setup/Constants.sol";
 import "test/setup/WithMocks.t.sol";
 
 contract TradeManagerAlterPositionsTest is Test, WithMocks {
-    TradeManager tradeManager;
+    TradeManagerHarness tradeManager;
     Constraints constraints;
     UpdateData[] updateData;
 
     function setUp() public {
-        tradeManager = new TradeManager(mockController, mockUserManager);
+        tradeManager = new TradeManagerHarness(mockController, mockUserManager);
         constraints = Constraints(1000 hours, 98, 102);
     }
 
@@ -35,7 +35,7 @@ contract TradeManagerAlterPositionsTest is Test, WithMocks {
 
         // ACT
         vm.prank(ALICE);
-        tradeManager.partiallyClosePosition(params, constraints, updateData);
+        tradeManager.exposed_partiallyClosePosition(params, ALICE);
     }
 
     function testRemoveMarginFromPosition() public {
@@ -53,8 +53,7 @@ contract TradeManagerAlterPositionsTest is Test, WithMocks {
         );
 
         // ACT
-        vm.prank(ALICE);
-        tradeManager.removeMarginFromPosition(params, constraints, updateData);
+        tradeManager.exposed_removeMarginFromPosition(params, ALICE);
     }
 
     function testAddMarginToPosition() public {
@@ -71,30 +70,12 @@ contract TradeManagerAlterPositionsTest is Test, WithMocks {
         );
 
         // ACT
-        vm.startPrank(ALICE);
+        vm.prank(ALICE);
         collateral.increaseAllowance(address(tradeManager), 1_000_000);
-        tradeManager.addMarginToPosition(params, constraints, updateData);
+        tradeManager.exposed_addMarginToPosition(params, ALICE);
     }
 
     function testExtendPositionToLeverage() public {
-        // ARRANGE
-        dealTokens(address(ALICE), 1_000_000);
-
-        ExtendPositionToLeverageParams memory params = ExtendPositionToLeverageParams({
-            tradePair: address(mockTradePair),
-            positionId: 111,
-            targetLeverage: 1_000_000
-        });
-
-        vm.warp(1001 hours);
-
-        // ACT
-        vm.startPrank(ALICE);
-        vm.expectRevert("TradeManager::_verifyConstraints: Deadline passed");
-        tradeManager.extendPositionToLeverage(params, constraints, updateData);
-    }
-
-    function testDeadlinePassed() public {
         // ARRANGE
         dealTokens(address(ALICE), 1_000_000);
 
@@ -113,6 +94,6 @@ contract TradeManagerAlterPositionsTest is Test, WithMocks {
         // ACT
         vm.startPrank(ALICE);
         collateral.increaseAllowance(address(tradeManager), 1_000_000);
-        tradeManager.extendPositionToLeverage(params, constraints, updateData);
+        tradeManager.exposed_extendPositionToLeverage(params, ALICE);
     }
 }

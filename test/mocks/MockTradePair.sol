@@ -14,7 +14,7 @@ contract MockTradePair is ITradePair {
     /// @notice this function is necessary to exclude this contract from test coverage
     function testMock() public {}
 
-    function initialize(string memory, IERC20Metadata, uint256, IPriceFeedAdapter, ILiquidityPoolAdapter) external {}
+    function initialize(string memory, IERC20Metadata, IPriceFeedAdapter, ILiquidityPoolAdapter) external {}
     /* ========== MOCK FUNCTIONS ========== */
 
     function setCollateral(IERC20 _collateral) external {
@@ -27,14 +27,6 @@ contract MockTradePair is ITradePair {
 
     function name() external pure returns (string memory) {
         return "MockTradePair";
-    }
-
-    function positionIdsOf(address) external pure returns (uint256[] memory) {
-        uint256[] memory positionIds = new uint256[](3);
-        positionIds[0] = 111;
-        positionIds[1] = 200;
-        positionIds[2] = 333;
-        return positionIds;
     }
 
     function getCurrentPrices() public pure returns (int256, int256) {
@@ -70,6 +62,13 @@ contract MockTradePair is ITradePair {
         return false;
     }
 
+    function positionIsLiquidatableAtPrice(uint256 positionId, int256) public pure returns (bool) {
+        if (positionId % 5 == 0) {
+            return true;
+        }
+        return false;
+    }
+
     function getCurrentFundingFeeRates() external pure returns (int256, int256) {
         return (0, 0);
     }
@@ -92,6 +91,10 @@ contract MockTradePair is ITradePair {
         return (0, 0, 0, 0, 0, 0, 0);
     }
 
+    function collateralToPriceMultiplier() external pure returns (uint256) {
+        return 1e16;
+    }
+
     function liquidatorReward() external pure returns (uint256) {
         return 0;
     }
@@ -112,7 +115,7 @@ contract MockTradePair is ITradePair {
         return 0;
     }
 
-    function totalSizeLimit() external pure returns (uint256) {
+    function totalVolumeLimit() external pure returns (uint256) {
         return 0;
     }
 
@@ -166,5 +169,5 @@ contract MockTradePair is ITradePair {
 
     function setFeeBufferFactor(int256) external {}
 
-    function setTotalSizeLimit(uint256) external {}
+    function setTotalVolumeLimit(uint256) external {}
 }

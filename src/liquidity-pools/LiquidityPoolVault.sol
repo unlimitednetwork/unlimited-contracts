@@ -22,10 +22,15 @@ abstract contract LiquidityPoolVault is ERC20Upgradeable, ILiquidityPoolVault {
 
     uint8 internal constant _decimals = 24;
 
+    // Storage gap
+    uint256[50] __gap;
+
     /**
      * @dev Set the underlying asset contract. This must be an ERC20-compatible contract (ERC20 or ERC777).
      */
     constructor(IERC20Metadata asset_) {
+        // To prevent a front-running attack, we make sure that the share decimals are larger than the asset decimals.
+        require(asset_.decimals() <= 18, "LiquidityPoolVault::constructor: asset decimals must be <= 18");
         _asset = asset_;
     }
 

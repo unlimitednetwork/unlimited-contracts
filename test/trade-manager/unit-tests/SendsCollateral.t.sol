@@ -6,7 +6,7 @@ import "forge-std/Test.sol";
 import "test/setup/WithMocks.t.sol";
 import "src/interfaces/ITradePair.sol";
 import "src/lib/PositionMaths.sol";
-import "src/trade-manager/TradeManager.sol";
+import "./../TradeManagerHarness.t.sol";
 import "test/mocks/MockTradePair.sol";
 import "test/mocks/MockUserManager.sol";
 import "test/mocks/MockController.sol";
@@ -14,12 +14,12 @@ import "test/mocks/MockToken.sol";
 import "test/setup/Constants.sol";
 
 contract TradeManagerCollateralTest is Test, WithMocks {
-    ITradeManager tradeManager;
+    TradeManagerHarness tradeManager;
     Constraints constraints = Constraints(1000 hours, 98, 100);
     UpdateData[] updateData;
 
     function setUp() public {
-        tradeManager = new TradeManager(mockController, mockUserManager);
+        tradeManager = new TradeManagerHarness(mockController, mockUserManager);
         mockTradePair.setCollateral(collateral);
     }
 
@@ -27,10 +27,9 @@ contract TradeManagerCollateralTest is Test, WithMocks {
         dealTokens(address(ALICE), 1_000);
         vm.startPrank(ALICE);
         collateral.increaseAllowance(address(tradeManager), 1_000);
-        tradeManager.openPosition(
+        tradeManager.exposed_openPosition(
             OpenPositionParams(address(mockTradePair), 1_000, LEVERAGE_0, IS_SHORT_0, REFERRER_0, WHITELABEL_ADDRESS_0),
-            constraints,
-            updateData
+            ALICE
         );
         assertEq(collateral.balanceOf(address(tradeManager)), 0, "TradeManager should have nothing");
         assertEq(collateral.balanceOf(address(mockTradePair)), 1_000, "Trade pair should have margin");
@@ -46,7 +45,7 @@ contract TradeManagerCollateralTest is Test, WithMocks {
         collateral.increaseAllowance(address(tradeManager), 1_000);
 
         // ACT
-        tradeManager.addMarginToPosition(params, constraints, updateData);
+        tradeManager.exposed_addMarginToPosition(params, ALICE);
 
         // ASSERT
         assertEq(collateral.balanceOf(address(tradeManager)), 0, "TradeManager should have nothing");
@@ -64,9 +63,9 @@ contract TradeManagerCollateralTest is Test, WithMocks {
         });
 
         // ACT
-        vm.startPrank(ALICE);
+        vm.prank(ALICE);
         collateral.increaseAllowance(address(tradeManager), 1_000);
-        tradeManager.extendPosition(params, constraints, updateData);
+        tradeManager.exposed_extendPosition(params, ALICE);
 
         // ASSERT
         assertEq(collateral.balanceOf(address(tradeManager)), 0, "TradeManager should have nothing");

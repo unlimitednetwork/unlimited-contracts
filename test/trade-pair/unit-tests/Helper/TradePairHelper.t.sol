@@ -3,6 +3,7 @@
 pragma solidity 0.8.17;
 
 import "forge-std/Test.sol";
+import {Solarray} from "test/setup/Solarray.sol";
 
 import "src/trade-pair/TradePairHelper.sol";
 import "test/mocks/MockController.sol";
@@ -17,37 +18,6 @@ contract TradePairHelperTest is Test {
         mockController = new MockController();
         mockTradePair = new MockTradePair();
         tradePairHelper = new TradePairHelper();
-    }
-
-    function testPositionIdsOf() public {
-        ITradePair[] memory tradePairs = new ITradePair[](1);
-        tradePairs[0] = mockTradePair;
-
-        uint256[][] memory positionIds = tradePairHelper.positionIdsOf(address(this), tradePairs);
-        assertEq(positionIds.length, 1);
-        assertEq(positionIds[0][0], 111);
-        assertEq(positionIds[0][1], 200);
-        assertEq(positionIds[0][2], 333);
-    }
-
-    function testPositionDetails() public {
-        ITradePair[] memory tradePairs = new ITradePair[](1);
-        tradePairs[0] = mockTradePair;
-
-        PositionDetails[][] memory positionDetails = tradePairHelper.positionDetailsOf(address(this), tradePairs);
-        assertEq(positionDetails.length, 1);
-        assertEq(positionDetails[0][0].margin, 0);
-    }
-
-    function testWithTwoTradePairs() public {
-        MockTradePair mockTradePair2 = new MockTradePair();
-        ITradePair[] memory tradePairs = new ITradePair[](2);
-        tradePairs[0] = mockTradePair;
-        tradePairs[1] = mockTradePair2;
-
-        PositionDetails[][] memory positionDetails = tradePairHelper.positionDetailsOf(address(this), tradePairs);
-        assertEq(positionDetails.length, 2);
-        assertEq(positionDetails[1][2].margin, 0);
     }
 
     function testPricesOfOneOfTwo() public {
@@ -74,5 +44,33 @@ contract TradePairHelperTest is Test {
         assertEq(prices[0].maxPrice, 101);
         assertEq(prices[1].minPrice, 99);
         assertEq(prices[1].maxPrice, 101);
+    }
+
+    function testBatchDetailsOfPositions() public {
+        MockTradePair mockTradePair2 = new MockTradePair();
+        PositionDetails memory differentDetails;
+
+        uint256 differentPositionId = 17;
+        uint256 differentMargin = 123;
+        differentDetails.margin = 123;
+
+        vm.mockCall(
+            address(mockTradePair2),
+            abi.encodeWithSelector(mockTradePair2.detailsOfPosition.selector, differentPositionId),
+            abi.encode(differentDetails)
+        );
+
+        address[] memory tradePairs = Solarray.addresses(address(mockTradePair), address(mockTradePair2));
+
+        uint256[][] memory ids = new uint256[][](2);
+        ids[0] = Solarray.uint256s(1, 2);
+        ids[1] = Solarray.uint256s(3, 4, differentPositionId);
+
+        PositionDetails[][] memory positionDetails = tradePairHelper.detailsOfPositions(tradePairs, ids);
+        assertEq(positionDetails.length, 2);
+        assertEq(positionDetails[0].length, 2);
+        assertEq(positionDetails[1].length, 3);
+        assertEq(positionDetails[0][0].margin, 0);
+        assertEq(positionDetails[1][2].margin, differentMargin);
     }
 }

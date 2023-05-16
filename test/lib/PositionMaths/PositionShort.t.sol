@@ -5,10 +5,9 @@ pragma solidity 0.8.17;
 import "forge-std/Test.sol";
 import "src/lib/PositionMaths.sol";
 import "test/setup/Constants.sol";
+import "test/setup/WithPositionMaths.t.sol";
 
-contract ShortPositionTest is Test {
-    Position position;
-
+contract ShortPositionTest is Test, WithPositionMaths {
     using PositionMaths for Position;
 
     function setUp() public {
@@ -20,11 +19,12 @@ contract ShortPositionTest is Test {
             lastBorrowFeeAmount: 0,
             pastFundingFeeIntegral: 0,
             lastFundingFeeAmount: 0,
+            collectedFundingFeeAmount: 0,
+            collectedBorrowFeeAmount: 0,
             lastFeeCalculationAt: uint48(block.timestamp),
             openedAt: uint48(block.timestamp),
             isShort: true,
             owner: msg.sender,
-            assetDecimals: ASSET_DECIMALS,
             lastAlterationBlock: uint40(block.number)
         });
     }
@@ -41,29 +41,25 @@ contract ShortPositionTest is Test {
         assertEq(position.entryLeverage(), LEVERAGE_0);
     }
 
-    function testBankruptcyPrice() public {
-        assertEq(position.bankruptcyPrice(), PRICE_BANKRUPTCY_1);
-    }
-
     function testCurrentVolume() public {
-        assertEq(position.currentVolume(2_000 * int256(COLLATERAL_MULTIPLIER)), 5_000_000 * COLLATERAL_MULTIPLIER);
+        assertEq(position.currentVolume(2_000 * int256(PRICE_MULTIPLIER)), 5_000_000 * COLLATERAL_MULTIPLIER);
 
         // Profit
-        assertEq(position.currentVolume(1_000 * int256(COLLATERAL_MULTIPLIER)), 2_500_000 * COLLATERAL_MULTIPLIER);
+        assertEq(position.currentVolume(1_000 * int256(PRICE_MULTIPLIER)), 2_500_000 * COLLATERAL_MULTIPLIER);
 
         // Loss
-        assertEq(position.currentVolume(3_000 * int256(COLLATERAL_MULTIPLIER)), 7_500_000 * COLLATERAL_MULTIPLIER);
+        assertEq(position.currentVolume(3_000 * int256(PRICE_MULTIPLIER)), 7_500_000 * COLLATERAL_MULTIPLIER);
     }
 
     function testCurrentPnL() public {
         // Profit
         // Price Change of 10%, so 50% of Margin Profit
-        assertEq(position.currentPnL(1_600 * int256(COLLATERAL_MULTIPLIER)), int256(MARGIN_0), "1_600");
-        assertEq(position.currentPnL(1_800 * int256(COLLATERAL_MULTIPLIER)), int256(MARGIN_0) / 2, "1_800");
+        assertEq(position.currentPnL(1_600 * int256(PRICE_MULTIPLIER)), int256(MARGIN_0), "1_600");
+        assertEq(position.currentPnL(1_800 * int256(PRICE_MULTIPLIER)), int256(MARGIN_0) / 2, "1_800");
 
         // Loss
-        assertEq(position.currentPnL(2_200 * int256(COLLATERAL_MULTIPLIER)), -int256(MARGIN_0 / 2), "2_200");
-        assertEq(position.currentPnL(2_400 * int256(COLLATERAL_MULTIPLIER)), -int256(MARGIN_0), "2_400");
+        assertEq(position.currentPnL(2_200 * int256(PRICE_MULTIPLIER)), -int256(MARGIN_0 / 2), "2_200");
+        assertEq(position.currentPnL(2_400 * int256(PRICE_MULTIPLIER)), -int256(MARGIN_0), "2_400");
     }
 
     function testCurrentValue() public {
@@ -71,33 +67,33 @@ contract ShortPositionTest is Test {
 
         // Profit
         assertEq(position.currentValue(0), int256(VOLUME_0) * 2, "0");
-        assertEq(position.currentValue(1_000 * int256(COLLATERAL_MULTIPLIER)), int256(VOLUME_0) * 3 / 2, "1_000");
-        assertEq(position.currentValue(1_600 * int256(COLLATERAL_MULTIPLIER)), int256(VOLUME_0) * 12 / 10, "1_600");
-        assertEq(position.currentValue(1_800 * int256(COLLATERAL_MULTIPLIER)), int256(VOLUME_0) * 11 / 10, "1_800");
+        assertEq(position.currentValue(1_000 * int256(PRICE_MULTIPLIER)), int256(VOLUME_0) * 3 / 2, "1_000");
+        assertEq(position.currentValue(1_600 * int256(PRICE_MULTIPLIER)), int256(VOLUME_0) * 12 / 10, "1_600");
+        assertEq(position.currentValue(1_800 * int256(PRICE_MULTIPLIER)), int256(VOLUME_0) * 11 / 10, "1_800");
 
         // Loss
-        assertEq(position.currentValue(2_200 * int256(COLLATERAL_MULTIPLIER)), int256(VOLUME_0) * 9 / 10, "2_200");
-        assertEq(position.currentValue(2_400 * int256(COLLATERAL_MULTIPLIER)), int256(VOLUME_0) * 8 / 10, "2_400");
-        assertEq(position.currentValue(3_000 * int256(COLLATERAL_MULTIPLIER)), int256(VOLUME_0) * 5 / 10, "3_000");
+        assertEq(position.currentValue(2_200 * int256(PRICE_MULTIPLIER)), int256(VOLUME_0) * 9 / 10, "2_200");
+        assertEq(position.currentValue(2_400 * int256(PRICE_MULTIPLIER)), int256(VOLUME_0) * 8 / 10, "2_400");
+        assertEq(position.currentValue(3_000 * int256(PRICE_MULTIPLIER)), int256(VOLUME_0) * 5 / 10, "3_000");
 
         // Total Loss
-        assertEq(position.currentValue(4_000 * int256(COLLATERAL_MULTIPLIER)), 0, "4_000");
-        assertEq(position.currentValue(5_000 * int256(COLLATERAL_MULTIPLIER)), int256(VOLUME_0) * -5 / 10, "5_000");
+        assertEq(position.currentValue(4_000 * int256(PRICE_MULTIPLIER)), 0, "4_000");
+        assertEq(position.currentValue(5_000 * int256(PRICE_MULTIPLIER)), int256(VOLUME_0) * -5 / 10, "5_000");
     }
 
     function testCurrentEquity() public {
         // Profit
         // Price of 1000, so 50% * 5 = 250% profit
-        assertEq(position.currentEquity(1_000 * int256(COLLATERAL_MULTIPLIER)), int256(MARGIN_0 * 7 / 2), "1_000");
-        assertEq(position.currentEquity(1_600 * int256(COLLATERAL_MULTIPLIER)), int256(MARGIN_0 * 2), "1_600");
-        assertEq(position.currentEquity(1_800 * int256(COLLATERAL_MULTIPLIER)), int256(MARGIN_0 * 3 / 2), "1_800");
+        assertEq(position.currentEquity(1_000 * int256(PRICE_MULTIPLIER)), int256(MARGIN_0 * 7 / 2), "1_000");
+        assertEq(position.currentEquity(1_600 * int256(PRICE_MULTIPLIER)), int256(MARGIN_0 * 2), "1_600");
+        assertEq(position.currentEquity(1_800 * int256(PRICE_MULTIPLIER)), int256(MARGIN_0 * 3 / 2), "1_800");
 
         // Loss
-        assertEq(position.currentEquity(2_200 * int256(COLLATERAL_MULTIPLIER)), int256(MARGIN_0 / 2), "2_200");
-        assertEq(position.currentEquity(2_400 * int256(COLLATERAL_MULTIPLIER)), 0, "2_400");
+        assertEq(position.currentEquity(2_200 * int256(PRICE_MULTIPLIER)), int256(MARGIN_0 / 2), "2_200");
+        assertEq(position.currentEquity(2_400 * int256(PRICE_MULTIPLIER)), 0, "2_400");
 
         // Price of 3_000, so 50% * 5 = 250% loss
-        assertEq(position.currentEquity(3_000 * int256(COLLATERAL_MULTIPLIER)), -int256(MARGIN_0 * 3 / 2), "3_000");
+        assertEq(position.currentEquity(3_000 * int256(PRICE_MULTIPLIER)), -int256(MARGIN_0 * 3 / 2), "3_000");
     }
 
     function testCurrentBorrowFeeAmount() public {
@@ -129,24 +125,24 @@ contract ShortPositionTest is Test {
 
         // PROFIT
         assertEq(
-            position.currentNetPnL(1_800 * int256(COLLATERAL_MULTIPLIER), BORROW_FEE_INTEGRAL_0, FUNDING_FEE_INTEGRAL_0),
+            position.currentNetPnL(1_800 * int256(PRICE_MULTIPLIER), BORROW_FEE_INTEGRAL_0, FUNDING_FEE_INTEGRAL_0),
             int256(MARGIN_0) / 2 - totalFeeAmount,
             "1_800"
         );
         assertEq(
-            position.currentNetPnL(1_600 * int256(COLLATERAL_MULTIPLIER), BORROW_FEE_INTEGRAL_0, FUNDING_FEE_INTEGRAL_0),
+            position.currentNetPnL(1_600 * int256(PRICE_MULTIPLIER), BORROW_FEE_INTEGRAL_0, FUNDING_FEE_INTEGRAL_0),
             int256(MARGIN_0) - totalFeeAmount,
             "1_600"
         );
 
         // Loss
         assertEq(
-            position.currentNetPnL(2_200 * int256(COLLATERAL_MULTIPLIER), BORROW_FEE_INTEGRAL_0, FUNDING_FEE_INTEGRAL_0),
+            position.currentNetPnL(2_200 * int256(PRICE_MULTIPLIER), BORROW_FEE_INTEGRAL_0, FUNDING_FEE_INTEGRAL_0),
             -int256(MARGIN_0 / 2) - totalFeeAmount,
             "2_200"
         );
         assertEq(
-            position.currentNetPnL(2_400 * int256(COLLATERAL_MULTIPLIER), BORROW_FEE_INTEGRAL_0, FUNDING_FEE_INTEGRAL_0),
+            position.currentNetPnL(2_400 * int256(PRICE_MULTIPLIER), BORROW_FEE_INTEGRAL_0, FUNDING_FEE_INTEGRAL_0),
             -int256(MARGIN_0) - totalFeeAmount,
             "2_400"
         );
@@ -162,48 +158,36 @@ contract ShortPositionTest is Test {
         // Profit
         // Price of 1000, so 50% * 5 = 250% profit
         assertEq(
-            position.currentNetEquity(
-                1_000 * int256(COLLATERAL_MULTIPLIER), BORROW_FEE_INTEGRAL_0, FUNDING_FEE_INTEGRAL_0
-            ),
+            position.currentNetEquity(1_000 * int256(PRICE_MULTIPLIER), BORROW_FEE_INTEGRAL_0, FUNDING_FEE_INTEGRAL_0),
             int256(MARGIN_0 * 7 / 2) - totalFeeAmount,
             "1_000"
         );
         assertEq(
-            position.currentNetEquity(
-                1_600 * int256(COLLATERAL_MULTIPLIER), BORROW_FEE_INTEGRAL_0, FUNDING_FEE_INTEGRAL_0
-            ),
+            position.currentNetEquity(1_600 * int256(PRICE_MULTIPLIER), BORROW_FEE_INTEGRAL_0, FUNDING_FEE_INTEGRAL_0),
             int256(MARGIN_0 * 2) - totalFeeAmount,
             "1_600"
         );
         assertEq(
-            position.currentNetEquity(
-                1_800 * int256(COLLATERAL_MULTIPLIER), BORROW_FEE_INTEGRAL_0, FUNDING_FEE_INTEGRAL_0
-            ),
+            position.currentNetEquity(1_800 * int256(PRICE_MULTIPLIER), BORROW_FEE_INTEGRAL_0, FUNDING_FEE_INTEGRAL_0),
             int256(MARGIN_0 * 3 / 2) - totalFeeAmount,
             "1_800"
         );
 
         // Loss
         assertEq(
-            position.currentNetEquity(
-                2_200 * int256(COLLATERAL_MULTIPLIER), BORROW_FEE_INTEGRAL_0, FUNDING_FEE_INTEGRAL_0
-            ),
+            position.currentNetEquity(2_200 * int256(PRICE_MULTIPLIER), BORROW_FEE_INTEGRAL_0, FUNDING_FEE_INTEGRAL_0),
             int256(MARGIN_0 / 2) - totalFeeAmount,
             "2_200"
         );
         assertEq(
-            position.currentNetEquity(
-                2_400 * int256(COLLATERAL_MULTIPLIER), BORROW_FEE_INTEGRAL_0, FUNDING_FEE_INTEGRAL_0
-            ),
+            position.currentNetEquity(2_400 * int256(PRICE_MULTIPLIER), BORROW_FEE_INTEGRAL_0, FUNDING_FEE_INTEGRAL_0),
             0 - totalFeeAmount,
             "2_400"
         );
 
         // Price of 3_000, so 50% * 5 = 250% loss
         assertEq(
-            position.currentNetEquity(
-                3_000 * int256(COLLATERAL_MULTIPLIER), BORROW_FEE_INTEGRAL_0, FUNDING_FEE_INTEGRAL_0
-            ),
+            position.currentNetEquity(3_000 * int256(PRICE_MULTIPLIER), BORROW_FEE_INTEGRAL_0, FUNDING_FEE_INTEGRAL_0),
             -int256(MARGIN_0 * 3 / 2) - totalFeeAmount,
             "3_000"
         );
@@ -218,11 +202,12 @@ contract ShortPositionTest is Test {
             0,
             0,
             0,
+            0,
+            0,
             uint48(block.timestamp),
             uint48(block.timestamp),
             IS_SHORT_0,
             msg.sender,
-            ASSET_DECIMALS,
             uint40(block.number)
         );
 

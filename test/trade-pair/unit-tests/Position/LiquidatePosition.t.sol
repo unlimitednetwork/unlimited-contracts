@@ -68,7 +68,11 @@ contract TradePairLiquidatePositionTest is Test, WithTradePair {
         vm.warp(50 hours);
         // Make sure that margin is equal to the total fee amounts.
         PositionDetails memory positionDetails = tradePair.detailsOfPosition(positionId);
-        assertEq(positionDetails.equity, 0, "equity");
+        assertEq(
+            positionDetails.currentBorrowFeeAmount + positionDetails.currentFundingFeeAmount,
+            int256(MARGIN_0),
+            "totalFeeAmount"
+        );
 
         // Liquidate
         tradePair.liquidatePosition(address(BOB), positionId);

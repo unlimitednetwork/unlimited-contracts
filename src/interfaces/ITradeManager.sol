@@ -248,44 +248,6 @@ interface ITradeManager {
 
     event MarginRemovedFromPosition(address indexed tradePair, uint256 indexed id, uint256 removedMargin);
 
-    /* ========== CORE FUNCTIONS - POSITIONS ========== */
-
-    function openPosition(OpenPositionParams calldata, Constraints calldata, UpdateData[] calldata)
-        external
-        returns (uint256 positionId);
-
-    function closePosition(ClosePositionParams calldata, Constraints calldata, UpdateData[] calldata) external;
-
-    function partiallyClosePosition(
-        PartiallyClosePositionParams calldata params,
-        Constraints calldata constraints,
-        UpdateData[] calldata updateData
-    ) external;
-
-    function removeMarginFromPosition(
-        RemoveMarginFromPositionParams calldata params,
-        Constraints calldata constraints,
-        UpdateData[] calldata updateData
-    ) external;
-
-    function addMarginToPosition(
-        AddMarginToPositionParams calldata params,
-        Constraints calldata constraints,
-        UpdateData[] calldata updateData
-    ) external;
-
-    function extendPosition(
-        ExtendPositionParams calldata params,
-        Constraints calldata constraints,
-        UpdateData[] calldata updateData
-    ) external;
-
-    function extendPositionToLeverage(
-        ExtendPositionToLeverageParams calldata params,
-        Constraints calldata constraints,
-        UpdateData[] calldata updateData
-    ) external;
-
     /* ========== CORE FUNCTIONS - LIQUIDATIONS ========== */
 
     function liquidatePosition(address tradePair, uint256 positionId, UpdateData[] calldata updateData) external;
@@ -308,7 +270,13 @@ interface ITradeManager {
         view
         returns (bool[][] memory canLiquidate);
 
+    function canLiquidatePositionsAtPrices(
+        address[] calldata tradePairs_,
+        uint256[][] calldata positionIds_,
+        int256[] calldata prices_
+    ) external view returns (bool[][] memory canLiquidate);
+
     function getCurrentFundingFeeRates(address tradePair) external view returns (int256, int256);
 
-    function totalSizeLimitOfTradePair(address tradePair_) external view returns (uint256);
+    function totalVolumeLimitOfTradePair(address tradePair_) external view returns (uint256);
 }

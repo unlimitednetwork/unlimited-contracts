@@ -46,6 +46,8 @@ interface ILiquidityPool {
 
     event PayedOutLoss(address indexed liquidityPoolAdapter, uint256 loss);
 
+    event CollectedEarlyWithdrawalFee(address user, uint256 amount);
+
     /* ========== CORE FUNCTIONS ========== */
 
     function deposit(uint256 amount, uint256 minOut) external returns (uint256);

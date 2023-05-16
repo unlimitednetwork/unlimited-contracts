@@ -3,6 +3,7 @@
 pragma solidity 0.8.17;
 
 import "forge-std/Test.sol";
+import "lib/openzeppelin-contracts/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import "../../src/user-manager/UserManager.sol";
 import "../mocks/MockUnlimitedOwner.sol";
 import "../mocks/MockController.sol";
@@ -22,7 +23,11 @@ contract UserManagerTest is WithMocks {
         // random time, shouldn't be less than 30 days in seconds
         vm.warp(START_TIME);
 
-        userManager = new UserManager(mockUnlimitedOwner, mockController, mockTradeManager);
+        UserManager _userManagerImplementation = new UserManager(mockUnlimitedOwner, mockController, mockTradeManager);
+
+        userManager =
+            UserManager(address(new TransparentUpgradeableProxy(address(_userManagerImplementation), address(1), "")));
+
         vm.prank(UNLIMITED_OWNER);
         userManager.initialize(feeSizes, volumes);
     }
@@ -109,7 +114,10 @@ contract UserManagerTest is WithMocks {
 
     function testInitialize() public {
         // ARRANGE
-        userManager = new UserManager(mockUnlimitedOwner, mockController, mockTradeManager);
+        UserManager _userManagerImplementation = new UserManager(mockUnlimitedOwner, mockController, mockTradeManager);
+
+        userManager =
+            UserManager(address(new TransparentUpgradeableProxy(address(_userManagerImplementation), address(1), "")));
 
         // ACT
         vm.prank(UNLIMITED_OWNER);

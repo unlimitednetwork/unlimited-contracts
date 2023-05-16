@@ -25,10 +25,8 @@ contract OpenPositionTest is Test, WithTradePair {
         assertEq(positionDetails.leverage, LEVERAGE_0, "leverage");
         assertEq(positionDetails.isShort, IS_SHORT_0, "isShort");
         assertEq(positionDetails.entryPrice, ASSET_PRICE_0, "entryPrice");
-        assertEq(positionDetails.markPrice, ASSET_PRICE_0, "price_mark");
-        assertEq(positionDetails.bankruptcyPrice, PRICE_BANKRUPTCY_0, "price_bankruptcy");
-        assertEq(positionDetails.equity, int256(MARGIN_0), "equity");
-        assertEq(positionDetails.PnL, int256(0), "PnL");
+        assertEq(positionDetails.liquidationPrice, LIQUIDATION_PRICE_0, "liquidationPrice");
+        assertEq(positionDetails.currentBorrowFeeAmount, 0, "currentBorrowFeeAmount");
     }
 
     function testMinLeverage() public {
@@ -43,7 +41,7 @@ contract OpenPositionTest is Test, WithTradePair {
         deal(address(collateral), address(ALICE), MARGIN_0 * 100);
         collateral.increaseAllowance(address(tradePair), MARGIN_0 * 100);
         vm.expectRevert("TradePair::_verifyLeverage: leverage must be under or equal max leverage");
-        tradePair.openPosition(address(ALICE), INITIAL_BALANCE, MAX_LEVERAGE + 1, IS_SHORT_0, WHITELABEL_ADDRESS_0);
+        tradePair.openPosition(address(ALICE), INITIAL_BALANCE, MAX_LEVERAGE + 2, IS_SHORT_0, WHITELABEL_ADDRESS_0);
         // should succeed:
         tradePair.openPosition(address(ALICE), INITIAL_BALANCE, MAX_LEVERAGE, IS_SHORT_0, WHITELABEL_ADDRESS_0);
     }
@@ -55,15 +53,28 @@ contract OpenPositionTest is Test, WithTradePair {
         tradePair.openPosition(address(ALICE), MIN_MARGIN, LEVERAGE_0, IS_SHORT_0, WHITELABEL_ADDRESS_0);
     }
 
-    function testTotalSizeLimit() public {
+    function testTotalVolumeLimit() public {
         vm.stopPrank();
         vm.prank(UNLIMITED_OWNER);
-        tradePair.setTotalSizeLimit(ASSET_AMOUNT_0);
+        tradePair.setTotalVolumeLimit(VOLUME_0);
         vm.startPrank(address(mockTradeManager));
 
+        // LONG
+
+        // One position should be fine
         tradePair.openPosition(address(ALICE), INITIAL_BALANCE, LEVERAGE_0, IS_SHORT_0, WHITELABEL_ADDRESS_0);
+
         // Opening another position should revert even though it is a short position
-        vm.expectRevert("TradePair::_checkSizeLimit: size limit reached");
+        vm.expectRevert("TradePair::_checkTotalVolumeLimitAfter: total volume limit reached by long positions");
+        tradePair.openPosition(address(ALICE), INITIAL_BALANCE, LEVERAGE_0, IS_SHORT_0, WHITELABEL_ADDRESS_0);
+
+        // SHORT
+
+        // One position should be fine
+        tradePair.openPosition(address(ALICE), INITIAL_BALANCE, LEVERAGE_0, IS_SHORT_1, WHITELABEL_ADDRESS_0);
+
+        // Opening another position should revert even though it is a short position
+        vm.expectRevert("TradePair::_checkTotalVolumeLimitAfter: total volume limit reached by short positions");
         tradePair.openPosition(address(ALICE), INITIAL_BALANCE, LEVERAGE_0, IS_SHORT_1, WHITELABEL_ADDRESS_0);
     }
 

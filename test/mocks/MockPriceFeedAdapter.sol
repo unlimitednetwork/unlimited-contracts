@@ -3,6 +3,7 @@
 pragma solidity 0.8.17;
 
 import "./../../src/interfaces/IPriceFeedAdapter.sol";
+import "./../../src/shared/Constants.sol";
 
 /**
  * @title Simple Price Feed Adapter
@@ -13,13 +14,15 @@ contract MockPriceFeedAdapter is IPriceFeedAdapter {
 
     string public name;
 
-    // Price of asset in collateral
-    int256 public markPriceMin = 2_000 * 1e6;
-    int256 public markPriceMax = 2_000 * 1e6;
+    // Price of asset with price decimals
+    int256 public markPriceMin = 2_000 * int256(PRICE_MULTIPLIER);
+    int256 public markPriceMax = 2_000 * int256(PRICE_MULTIPLIER);
 
     uint256 public immutable ASSET_PRECISION;
+    uint256 public immutable COLLATERAL_PRECISION;
     uint256 public assetDecimals = 18;
     uint256 public collateralDecimals = 6;
+    uint256 public priceDecimals = PRICE_DECIMALS;
 
     /// @notice this function is necessary to exclude this contract from test coverage
     function testMock() public {}
@@ -31,6 +34,7 @@ contract MockPriceFeedAdapter is IPriceFeedAdapter {
         assetDecimals = _assetDecimals;
         collateralDecimals = _collateralDecimals;
         ASSET_PRECISION = 10 ** _assetDecimals;
+        COLLATERAL_PRECISION = 10 ** _collateralDecimals;
     }
 
     function initialize(IPriceFeedAggregator, IPriceFeedAggregator) external {}
@@ -46,7 +50,7 @@ contract MockPriceFeedAdapter is IPriceFeedAdapter {
      * @param collateralAmount the amount of collateral
      */
     function collateralToAsset(uint256 collateralAmount) external view returns (uint256) {
-        return collateralAmount * ASSET_PRECISION / uint256(markPriceMin);
+        return collateralAmount * ASSET_PRECISION * PRICE_MULTIPLIER / uint256(markPriceMin) / COLLATERAL_PRECISION;
     }
 
     /**
@@ -54,23 +58,23 @@ contract MockPriceFeedAdapter is IPriceFeedAdapter {
      * @param assetAmount the amount of asset
      */
     function assetToCollateral(uint256 assetAmount) external view returns (uint256) {
-        return assetAmount * uint256(markPriceMin) / ASSET_PRECISION;
+        return assetAmount * uint256(markPriceMin) * COLLATERAL_PRECISION / ASSET_PRECISION / PRICE_MULTIPLIER;
     }
 
     function collateralToAssetMin(uint256 collateralAmount) external view returns (uint256) {
-        return collateralAmount * ASSET_PRECISION / uint256(markPriceMax);
+        return collateralAmount * ASSET_PRECISION * PRICE_MULTIPLIER / uint256(markPriceMax) / COLLATERAL_PRECISION;
     }
 
     function collateralToAssetMax(uint256 collateralAmount) external view returns (uint256) {
-        return collateralAmount * ASSET_PRECISION / uint256(markPriceMin);
+        return collateralAmount * ASSET_PRECISION * PRICE_MULTIPLIER / uint256(markPriceMin) / COLLATERAL_PRECISION;
     }
 
     function assetToCollateralMin(uint256 assetAmount) external view returns (uint256) {
-        return assetAmount * uint256(markPriceMin) / ASSET_PRECISION;
+        return assetAmount * uint256(markPriceMin) * COLLATERAL_PRECISION / ASSET_PRECISION / PRICE_MULTIPLIER;
     }
 
     function assetToCollateralMax(uint256 assetAmount) external view returns (uint256) {
-        return assetAmount * uint256(markPriceMax) / ASSET_PRECISION;
+        return assetAmount * uint256(markPriceMax) * COLLATERAL_PRECISION / ASSET_PRECISION / PRICE_MULTIPLIER;
     }
 
     function assetToUsdMin(uint256) external pure returns (uint256) {

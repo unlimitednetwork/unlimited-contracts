@@ -3,6 +3,7 @@
 pragma solidity 0.8.17;
 
 import "forge-std/Test.sol";
+import "lib/openzeppelin-contracts/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import "src/price-feed/ChainlinkUsdPriceFeed.sol";
 import "src/price-feed/PriceFeedAdapter.sol";
 import "src/interfaces/IPriceFeedAdapter.sol";
@@ -10,25 +11,27 @@ import "src/interfaces/IController.sol";
 import "src/trade-pair/TradePair.sol";
 import "src/liquidity-pools/LiquidityPool.sol";
 import "src/fee-manager/FeeManager.sol";
-import "src/trade-manager/TradeManager.sol";
+import "src/trade-manager/TradeManagerOrders.sol";
 import "src/liquidity-pools/LiquidityPoolAdapter.sol";
 import "src/sys-controller/Controller.sol";
 import "src/sys-controller/UnlimitedOwner.sol";
 import "src/user-manager/UserManager.sol";
 
+import "test/mocks/MockArbSys.sol";
 import "test/mocks/MockToken.sol";
 import "test/mocks/MockPriceFeedAdapter.sol";
 import "./Constants.sol";
+import "./WithAlterationHelpers.t.sol";
 
 /**
  * @notice Test fixtures help to simulate specific scenarios in test cases
  */
-contract WithFullFixtures is Test {
+contract WithFullFixtures is Test, WithAlterationHelpers {
     using PositionMaths for Position;
 
     IController public controller;
     IUserManager public userManager;
-    ITradeManager public tradeManager;
+    ITradeManagerOrders public tradeManager;
     IFeeManager public feeManager;
     UnlimitedOwner unlimitedOwner;
 
@@ -42,18 +45,23 @@ contract WithFullFixtures is Test {
 
     function _deployMainContracts() internal {
         controller = _deployController();
-        address tradeManager_ = computeCreateAddress(address(this), vm.getNonce(address(this)) + 1);
+        address tradeManager_ = computeCreateAddress(address(this), vm.getNonce(address(this)) + 2);
         userManager = _deployUserManager(controller, ITradeManager(tradeManager_));
 
         tradeManager = _deployTradeManager(controller, userManager);
         feeManager = _deployFeeManager(controller, userManager);
+
+        // Setup Arbitrum environment
+        vm.etch(address(100), address(new MockArbSys()).code);
     }
 
     function _deployController() internal returns (IController) {
-        unlimitedOwner = new UnlimitedOwner();
+        unlimitedOwner =
+            UnlimitedOwner(address(new TransparentUpgradeableProxy(address(new UnlimitedOwner()), address(1), "")));
         unlimitedOwner.initialize();
 
         Controller _controller = new Controller(unlimitedOwner);
+        _controller.addOrderExecutor(BACKEND);
 
         return _controller;
     }
@@ -61,34 +69,44 @@ contract WithFullFixtures is Test {
     function _deployUserManager(IController _controller, ITradeManager _tradeManager) internal returns (IUserManager) {
         // To simplify tests, we use the same fee sizes for the first two tiers
         uint8[7] memory feeSizes = [10, 10, 8, 7, 6, 5, 4];
-        uint32[6] memory volumes = [1_000_000, 10_000_000, 100_000_000, 250_000_000, 500_000_000, 1_000_000_000];
+        uint32[6] memory volumes = [1_000_000, 20_000_000, 100_000_000, 250_000_000, 500_000_000, 1_000_000_000];
 
-        UserManager _userManager = new UserManager(unlimitedOwner, _controller, _tradeManager);
+        UserManager _userManagerImplementation = new UserManager(unlimitedOwner, _controller, _tradeManager);
+
+        UserManager _userManager =
+            UserManager(address(new TransparentUpgradeableProxy(address(_userManagerImplementation), address(1), "")));
+
         _userManager.initialize(feeSizes, volumes);
 
         return _userManager;
     }
 
-    function _deployTradeManager(IController _controller, IUserManager _userManager) internal returns (ITradeManager) {
-        TradeManager _tradeManager = new TradeManager(_controller, _userManager);
-        return ITradeManager(_tradeManager);
+    function _deployTradeManager(IController _controller, IUserManager _userManager)
+        internal
+        returns (ITradeManagerOrders)
+    {
+        TradeManagerOrders _tradeManager = new TradeManagerOrders(_controller, _userManager);
+        return ITradeManagerOrders(_tradeManager);
     }
 
     function _deployFeeManager(IController _controller, IUserManager _userManager) internal returns (IFeeManager) {
-        FeeManager _feeManager = new FeeManager(unlimitedOwner, _controller, _userManager);
+        IFeeManager feeManagerImplementation = new FeeManager(unlimitedOwner, _controller, _userManager);
+        FeeManager _feeManager = FeeManager(
+            address(new TransparentUpgradeableProxy(address(feeManagerImplementation), address(unlimitedOwner), ""))
+        );
         _feeManager.initialize(
             10_00, // 10% max payout
             STAKERS_ADDRESS,
             DEV_ADDRESS,
             INSURANCE_ADDRESS
         );
-        return IFeeManager(_feeManager);
+        return _feeManager;
     }
 
     function _deployPriceFeed(IController _controller) internal returns (MockPriceFeedAdapter) {
         MockPriceFeedAdapter priceFeedAdapter =
             new MockPriceFeedAdapter("Mock Price Feed Adapter", ASSET_DECIMALS, COLLATERAL_DECIMALS);
-        int256 price = int256(2_000 * (10 ** COLLATERAL_DECIMALS));
+        int256 price = int256(2_000 * (PRICE_MULTIPLIER));
         priceFeedAdapter.setMarkPrices(price, price);
 
         _controller.addPriceFeed(address(priceFeedAdapter));
@@ -100,7 +118,11 @@ contract WithFullFixtures is Test {
         internal
         returns (ILiquidityPool)
     {
-        LiquidityPool liquidityPool = new LiquidityPool(unlimitedOwner, collateral, _controller);
+        LiquidityPool liquidityPoolImplementation = new LiquidityPool(unlimitedOwner, collateral, _controller);
+
+        LiquidityPool liquidityPool = LiquidityPool(
+            address(new TransparentUpgradeableProxy(address(liquidityPoolImplementation), address(unlimitedOwner), ""))
+        );
 
         liquidityPool.initialize(name, name, 0, 0, 0, 0);
 
@@ -115,8 +137,14 @@ contract WithFullFixtures is Test {
         IERC20Metadata collateral,
         LiquidityPoolConfig[] memory liquidityConfig
     ) internal returns (ILiquidityPoolAdapter) {
-        LiquidityPoolAdapter liquidityPoolAdapter =
+        LiquidityPoolAdapter liquidityPoolAdapterImplementation =
             new LiquidityPoolAdapter(unlimitedOwner, _controller, address(_feeManager), collateral);
+
+        LiquidityPoolAdapter liquidityPoolAdapter = LiquidityPoolAdapter(
+            address(
+                new TransparentUpgradeableProxy(address(liquidityPoolAdapterImplementation), address(unlimitedOwner), "")
+            )
+        );
 
         liquidityPoolAdapter.initialize(FULL_PERCENT, liquidityConfig);
 
@@ -134,12 +162,16 @@ contract WithFullFixtures is Test {
         IPriceFeedAdapter priceFeedAdapter,
         ILiquidityPoolAdapter liquidityPoolAdapter
     ) internal returns (ITradePair) {
-        TradePair tradePair = new TradePair(unlimitedOwner,
+        TradePair tradePairImplementation = new TradePair(unlimitedOwner,
             _tradeManager,
             _userManager,
             _feeManager
         );
-        tradePair.initialize("Shit Coin Trade Pair", collateral, ASSET_DECIMALS, priceFeedAdapter, liquidityPoolAdapter);
+        TradePair tradePair = TradePair(
+            address(new TransparentUpgradeableProxy(address(tradePairImplementation), address(unlimitedOwner), ""))
+        );
+
+        tradePair.initialize("Shit Coin Trade Pair", collateral, priceFeedAdapter, liquidityPoolAdapter);
 
         _controller.addTradePair(address(tradePair));
 
@@ -153,7 +185,7 @@ contract WithFullFixtures is Test {
         tradePair.setMaxFundingFeeRate(FUNDING_FEE_0);
         tradePair.setMaxExcessRatio(MAX_EXCESS_RATIO);
         tradePair.setFeeBufferFactor(BUFFER_FACTOR);
-        tradePair.setTotalSizeLimit(TOTAL_ASSET_AMOUNT_LIMIT);
+        tradePair.setTotalVolumeLimit(TOTAL_VOLUME_LIMIT);
 
         return tradePair;
     }

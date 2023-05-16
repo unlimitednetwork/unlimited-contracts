@@ -2,6 +2,7 @@
 
 pragma solidity 0.8.17;
 
+import "lib/openzeppelin-contracts/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import "test/setup/WithMocks.t.sol";
 import "src/fee-manager/FeeManager.sol";
 
@@ -18,10 +19,13 @@ contract FeeManagerTest is WithMocks {
     FeeManager feeManager;
 
     function setUp() public {
-        feeManager = new FeeManager(
+        IFeeManager feeManagerImplementation = new FeeManager(
             mockUnlimitedOwner,
             mockController,
             mockUserManager
+        );
+        feeManager = FeeManager(
+            address(new TransparentUpgradeableProxy(address(feeManagerImplementation), address(mockUnlimitedOwner), ""))
         );
 
         vm.prank(UNLIMITED_OWNER);
@@ -32,12 +36,15 @@ contract FeeManagerTest is WithMocks {
         mockTradePair.setLiquidityPoolAdapter(mockLiquidityPoolAdapter);
     }
 
-    function testInitialize() public {
+    function testInitializable() public {
         // ARRANGE
-        feeManager = new FeeManager(
+        IFeeManager feeManagerImplementation = new FeeManager(
             mockUnlimitedOwner,
             mockController,
             mockUserManager
+        );
+        feeManager = FeeManager(
+            address(new TransparentUpgradeableProxy(address(feeManagerImplementation), address(mockUnlimitedOwner), ""))
         );
 
         // ACT
