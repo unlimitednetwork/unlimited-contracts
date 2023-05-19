@@ -4,7 +4,7 @@ Unlimited Leverage contracts implementation.
 
 ## About
 
-Unlimited Leverage is a margin trading plattform that allows traders to open synthetic positions on coins and tokens with a leverage of up to 100x.
+Unlimited Leverage is a margin trading platform that allows traders to open synthetic positions on assets and tokens with a leverage of up to 100x.
 
 ## Contracts
 
